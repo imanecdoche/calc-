@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account registration with registered username",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "username": { "type": "string" },
+        "displayName": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["uid", "username"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "An encrypted chat message inside a conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "status": { "type": "string", "enum": ["sending", "sent", "delivered", "read", "failed"] },
+        "replyToId": { "type": "string" },
+        "replyToText": { "type": "string" },
+        "replyToSender": { "type": "string" },
+        "deletedForEveryone": { "type": "boolean" },
+        "deletedForMeUids": { "type": "array" },
+        "audioUrl": { "type": "string" },
+        "duration": { "type": "number" }
+      },
+      "required": ["senderId", "receiverId", "text", "timestamp"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Metadata for a direct messaging channel between two users",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array" },
+        "lastActivity": { "type": "number" }
+      },
+      "required": ["participants", "lastActivity"]
+    },
+    "Call": {
+      "title": "Voice Call",
+      "description": "1-on-1 real-time WebRTC voice call session",
+      "type": "object",
+      "properties": {
+        "caller": { "type": "string" },
+        "receiver": { "type": "string" },
+        "status": { "type": "string", "enum": ["calling", "ringing", "connecting", "connected", "busy", "declined", "ended", "timeout"] },
+        "offer": { "type": "object" },
+        "answer": { "type": "object" },
+        "iceCandidates": { "type": "array" },
+        "createdAt": { "type": "number" },
+        "endedAt": { "type": "number" }
+      },
+      "required": ["caller", "receiver", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Registered user accounts mapping to user profile details"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Direct conversation rooms"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Individual messages within a conversation"
+    },
+    "/calls/{callId}": {
+      "schema": "Call",
+      "description": "Call signaling records for WebRTC"
+    }
+  }
+}

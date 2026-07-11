@@ -1,0 +1,6 @@
+{
+  "name": "Calc+",
+  "description": "A highly polished scientific calculator with a minimal modern dark interface and special secret mechanism.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
