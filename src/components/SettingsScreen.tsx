@@ -75,6 +75,10 @@ export default function SettingsScreen({
   // Reset confirmation modal state
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // Logout confirmation modal states
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   // Fullscreen toggle state
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -197,11 +201,21 @@ export default function SettingsScreen({
 
   const changelogs: ChangelogEntry[] = [
     {
+      version: 'v1.7.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Menambahkan fitur Logout Akun Chat di menu Pengaturan' },
+        { type: 'added', text: 'Menambahkan dialog konfirmasi internal sebelum proses logout untuk mencegah ketidaksengajaan' },
+        { type: 'improved', text: 'Mengintegrasikan pelepasan hak akses dan pembersihan sesi aktif saat logout secara real-time' }
+      ]
+    },
+    {
       version: 'v1.6.0',
       date: '2026-07-12',
       changes: [
         { type: 'added', text: 'Menambahkan autentikasi Sandi Akun untuk registrasi, login silang perangkat, dan keamanan ganda' },
         { type: 'added', text: 'Menambahkan panel Manajemen Keamanan Sandi untuk akun chat yang sudah ada' },
+        { type: 'added', text: 'Menambahkan portal Kelola Akun (DevTools) rahasia via trigger math 3+2+1= dan kode akses 4321' },
         { type: 'improved', text: 'Validasi ketat username hanya mendukung karakter a-z dan 0-9 dengan pembersihan otomatis saat mengetik' },
         { type: 'removed', text: 'Menghapus panduan pengguna interaktif dari menu pengaturan' },
         { type: 'removed', text: 'Menghapus fitur rekam & kirim pesan suara (Voice Note) dari ruang chat' },
@@ -416,6 +430,19 @@ export default function SettingsScreen({
                   <span>{chatViewModel.myUserHasPassword ? 'Simpan Sandi Baru' : 'Atur Sandi Sekarang'}</span>
                 </button>
               </form>
+
+              <div className="border-t border-neutral-900/60 pt-4 flex flex-col space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className="w-full py-2.5 rounded-xl bg-rose-950/20 hover:bg-rose-950/40 border border-rose-900/30 text-rose-400 hover:text-rose-300 text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer min-h-[44px]"
+                >
+                  <span>Keluar dari Akun (Logout)</span>
+                </button>
+                <p className="text-[10px] text-neutral-500 text-center leading-relaxed">
+                  Gunakan tombol ini jika ingin login dengan username lain pada perangkat ini.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="p-3 text-center bg-[#0a0a0a] rounded-xl border border-neutral-900/60">
@@ -672,6 +699,63 @@ export default function SettingsScreen({
                   className="flex-1 py-3 px-4 rounded-xl bg-rose-950/40 hover:bg-rose-950/60 border border-rose-900/50 text-rose-400 text-xs font-bold cursor-pointer min-h-[44px]"
                 >
                   Confirm Purge
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Logout Confirmation Modal */}
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/90 backdrop-blur-md z-40 flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.97, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.97, y: 10 }}
+              className="w-full max-w-sm bg-[#121212] border border-neutral-900 rounded-2xl p-6 shadow-2xl space-y-4"
+            >
+              <div className="w-12 h-12 rounded-xl bg-rose-950/20 border border-rose-950/60 flex items-center justify-center text-rose-450 mx-auto">
+                <AlertTriangle size={20} />
+              </div>
+
+              <div className="text-center space-y-2">
+                <h3 className="font-bold text-neutral-100 text-sm uppercase tracking-wider font-sans">LOGOUT AKUN CHAT?</h3>
+                <p className="text-xs text-neutral-500 leading-relaxed max-w-[265px] mx-auto">
+                  Anda akan keluar dari akun <strong className="text-neutral-200">@{chatViewModel.myUsername}</strong> pada perangkat ini. Pastikan Anda mengingat kata sandi Anda untuk masuk kembali di kemudian hari.
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  disabled={isLoggingOut}
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 py-3 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-850 text-neutral-400 text-xs font-bold cursor-pointer min-h-[44px]"
+                >
+                  Batal
+                </button>
+                <button
+                  disabled={isLoggingOut}
+                  onClick={async () => {
+                    setIsLoggingOut(true);
+                    const res = await chatViewModel.logout();
+                    setIsLoggingOut(false);
+                    setShowLogoutConfirm(false);
+                    if (res.success) {
+                      showToast('Berhasil keluar dari akun.', 'success');
+                    } else {
+                      showToast(res.error || 'Gagal logout.', 'error');
+                    }
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-rose-950/40 hover:bg-rose-950/60 border border-rose-900/50 text-rose-400 text-xs font-bold cursor-pointer min-h-[44px] flex items-center justify-center"
+                >
+                  {isLoggingOut ? 'Mengeluarkan...' : 'Keluar Akun'}
                 </button>
               </div>
             </motion.div>

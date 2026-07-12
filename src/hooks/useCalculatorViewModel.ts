@@ -23,8 +23,8 @@ interface LocalStorageData {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  version: '1.5.0',
-  buildDate: '2026-07-11',
+  version: '1.7.0',
+  buildDate: '2026-07-12',
   environment: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   fullscreen: false,
   theme: 'dark',
@@ -59,6 +59,7 @@ export function useCalculatorViewModel() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isDegree, setIsDegree] = useState<boolean>(false);
   const [isTriggered, setIsTriggered] = useState<boolean>(false);
+  const [isDevTriggered, setIsDevTriggered] = useState<boolean>(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState<boolean>(false);
 
   // --- Vault States (Persisted) ---
@@ -151,6 +152,13 @@ export function useCalculatorViewModel() {
       navigate('unlock');
       return;
     }
+    if (isDevTriggered) {
+      setIsDevTriggered(false);
+      setExpression('');
+      setResult('');
+      navigate('dev_unlock');
+      return;
+    }
 
     let nextExpr = expression;
 
@@ -191,7 +199,7 @@ export function useCalculatorViewModel() {
     // Direct Fullscreen checking on typing
     if (value !== '=') {
       const cleanNext = nextExpr.replace(/\s+/g, '');
-      const isPrefix = cleanNext !== '' && '1+2+3'.startsWith(cleanNext);
+      const isPrefix = cleanNext !== '' && ('1+2+3'.startsWith(cleanNext) || '3+2+1'.startsWith(cleanNext));
       if (isPrefix) {
         FullscreenManager.getInstance().setSecretSessionActive(true);
       } else {
@@ -212,6 +220,18 @@ export function useCalculatorViewModel() {
       setIsTriggered(true); // Flag to transition on next click
       FullscreenManager.getInstance().setSecretSessionActive(true);
       // Still add to calculation history for authenticity!
+      const newHistoryItem: HistoryItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        expression: expression,
+        result: '0',
+        timestamp: Date.now()
+      };
+      setHistory(prev => [newHistoryItem, ...prev]);
+      return;
+    } else if (trimmedExpr === '3+2+1') {
+      setResult('0');
+      setIsDevTriggered(true); // Flag to transition on next click for Developer Tools
+      FullscreenManager.getInstance().setSecretSessionActive(true);
       const newHistoryItem: HistoryItem = {
         id: Math.random().toString(36).substr(2, 9),
         expression: expression,
@@ -254,13 +274,14 @@ export function useCalculatorViewModel() {
 
   // Sync screen changes to FullscreenManager
   useEffect(() => {
-    const secretScreens = ['unlock', 'messenger', 'vault'];
+    const secretScreens = ['unlock', 'dev_unlock', 'dev_tools', 'messenger', 'vault'];
     const isSecret = secretScreens.includes(screen) || (screen === 'settings' && prevScreen !== 'calculator');
     
     if (isSecret) {
       FullscreenManager.getInstance().setSecretSessionActive(true);
     } else if (screen === 'calculator') {
-      const isPrefix = expression.replace(/\s+/g, '') !== '' && '1+2+3'.startsWith(expression.replace(/\s+/g, ''));
+      const cleanExpr = expression.replace(/\s+/g, '');
+      const isPrefix = cleanExpr !== '' && ('1+2+3'.startsWith(cleanExpr) || '3+2+1'.startsWith(cleanExpr));
       if (!isPrefix) {
         FullscreenManager.getInstance().setSecretSessionActive(false);
       }

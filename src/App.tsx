@@ -20,6 +20,8 @@ import UnlockScreen from './components/UnlockScreen';
 import SecretVault from './components/SecretVault';
 import SettingsScreen from './components/SettingsScreen';
 import SecretMessengerScreen from './components/SecretMessengerScreen';
+import DevUnlockScreen from './components/DevUnlockScreen';
+import DevToolsScreen from './components/DevToolsScreen';
 
 export default function App() {
   const {
@@ -220,6 +222,21 @@ export default function App() {
                   clearCache={clearCache}
                   getStorageUsage={getStorageUsage}
                   onBack={() => navigate(prevScreen)}
+                  showToast={showToast}
+                />
+              )}
+
+              {screen === 'dev_unlock' && (
+                <DevUnlockScreen
+                  onUnlockSuccess={() => navigate('dev_tools')}
+                  onCancel={() => navigate('calculator')}
+                  showToast={showToast}
+                />
+              )}
+
+              {screen === 'dev_tools' && (
+                <DevToolsScreen
+                  onBack={() => navigate('calculator')}
                   showToast={showToast}
                 />
               )}

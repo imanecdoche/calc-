@@ -1,9 +1,58 @@
-import { collection, doc, getDocs, query, setDoc, where, getDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, query, setDoc, where, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/FirebaseModule';
 import { User } from '../models/User';
 
 export class UserRepository {
   private usersCollection = collection(db, 'users');
+
+  /**
+   * Fetch all registered users for Developer Tools.
+   */
+  public async getAllUsers(): Promise<any[]> {
+    const querySnapshot = await getDocs(this.usersCollection);
+    const list: any[] = [];
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      list.push({
+        id: docSnap.id,
+        uid: data.uid || docSnap.id,
+        username: data.username,
+        password: data.password || '',
+        createdAt: data.createdAt || 0,
+      });
+    });
+    return list;
+  }
+
+  /**
+   * Delete a user by UID/document ID.
+   */
+  public async deleteUser(uid: string): Promise<void> {
+    if (!uid) return;
+    const userDocRef = doc(db, 'users', uid);
+    await deleteDoc(userDocRef);
+  }
+
+  /**
+   * Update a user's details from DevTools.
+   */
+  public async updateUser(uid: string, username: string, passwordVal: string): Promise<boolean> {
+    if (!uid) return false;
+    const normalized = username.trim().toLowerCase();
+    
+    // Check if the username is taken by someone else
+    const existingUser = await this.getUserByUsername(normalized);
+    if (existingUser && (existingUser as any).uid !== uid) {
+      return false; // username is taken by someone else
+    }
+
+    const userDocRef = doc(db, 'users', uid);
+    await setDoc(userDocRef, {
+      username: normalized,
+      password: passwordVal
+    }, { merge: true });
+    return true;
+  }
 
   /**
    * Search for a user by their username (case-insensitive query simulation).

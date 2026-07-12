@@ -58,6 +58,26 @@ export default function SecretMessengerScreen({
   // Recent apps task protection state
   const [isAppVisible, setIsAppVisible] = useState(true);
 
+  // Manage visual viewport height to prevent keyboard obscuring
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!window.visualViewport) return;
+
+    const handleResize = () => {
+      setViewportHeight(window.visualViewport ? window.visualViewport.height : window.innerHeight);
+    };
+
+    window.visualViewport.addEventListener('resize', handleResize);
+    window.visualViewport.addEventListener('scroll', handleResize);
+    handleResize();
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleResize);
+      window.visualViewport?.removeEventListener('scroll', handleResize);
+    };
+  }, []);
+
   // 1. Manage Web-equivalent of FLAG_SECURE and Session Inactivity Timeout
   useEffect(() => {
     const secureWindow = SecureWindowManager.getInstance();
@@ -215,7 +235,10 @@ export default function SecretMessengerScreen({
   };
 
   return (
-    <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col justify-between text-neutral-100 select-none">
+    <div 
+      className="absolute inset-0 bg-[#0a0a0a] flex flex-col justify-between text-neutral-100 select-none"
+      style={viewportHeight ? { height: `${viewportHeight}px`, bottom: 'auto' } : {}}
+    >
       
       {/* 1. Header (Sticky Top, Very Discreet) */}
       <header className="h-14 bg-[#0a0a0a] border-b border-neutral-900 flex items-center justify-between px-4 sticky top-0 z-30 flex-none">
@@ -357,7 +380,7 @@ export default function SecretMessengerScreen({
                           registerError 
                             ? 'border-rose-950/80 focus:border-rose-800 text-rose-300' 
                             : 'border-neutral-900 focus:border-neutral-800 text-neutral-200'
-                        } rounded-xl text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
+                        } rounded-xl text-base sm:text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
                       />
                     </motion.div>
                   </div>
@@ -381,7 +404,7 @@ export default function SecretMessengerScreen({
                           registerError 
                             ? 'border-rose-950/80 focus:border-rose-800 text-rose-300' 
                             : 'border-neutral-900 focus:border-neutral-800 text-neutral-200'
-                        } rounded-xl text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
+                        } rounded-xl text-base sm:text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
                       />
                       <button
                         type="button"
@@ -548,7 +571,7 @@ export default function SecretMessengerScreen({
                           viewModel.errorMsg 
                             ? 'border-rose-950/80 focus:border-rose-800 text-rose-300' 
                             : 'border-neutral-900 focus:border-neutral-800 text-neutral-200'
-                        } rounded-xl text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
+                        } rounded-xl text-base sm:text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
                       />
                     </motion.div>
                   </div>

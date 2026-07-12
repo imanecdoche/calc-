@@ -2,7 +2,7 @@
  * Types and interfaces for Calc+
  */
 
-export type AppScreen = 'calculator' | 'unlock' | 'vault' | 'settings' | 'messenger';
+export type AppScreen = 'calculator' | 'unlock' | 'vault' | 'settings' | 'messenger' | 'dev_unlock' | 'dev_tools';
 
 export interface HistoryItem {
   id: string;

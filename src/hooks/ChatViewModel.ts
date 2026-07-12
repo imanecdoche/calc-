@@ -244,6 +244,23 @@ export function useChatViewModel() {
     }
   }, [authUid, myUsername]);
 
+  // Disassociate/delete current user registration mapping for Logout
+  const logout = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!authUid) {
+      return { success: false, error: 'Sesi aktif tidak ditemukan.' };
+    }
+    try {
+      await userRepository.deleteUser(authUid);
+      setMyUsername(null);
+      setMyUserHasPassword(false);
+      setActiveTargetUser(null);
+      return { success: true };
+    } catch (err: any) {
+      console.error('Logout error:', err);
+      return { success: false, error: 'Gagal melakukan logout dari server.' };
+    }
+  }, [authUid]);
+
   // 5. Connect to a target username with explicit Loading state
   const connectToUser = useCallback(async (targetUsername: string): Promise<boolean> => {
     setErrorMsg(null);
@@ -583,6 +600,7 @@ export function useChatViewModel() {
     registerMyUsername,
     loginToExistingAccount,
     updateMyPassword,
+    logout,
     connectToUser,
     sendMessage,
     handleRetryMessage,

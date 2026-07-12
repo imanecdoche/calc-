@@ -650,20 +650,38 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
                 placeholder={`Message ${activeTargetUser.displayName}...`}
                 value={text}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-[#090a0f] border border-neutral-900 focus:border-indigo-900 text-neutral-200 placeholder-neutral-600 rounded-xl text-xs focus:outline-none focus:ring-0 transition-all font-sans"
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollToBottom();
+                  }, 150);
+                }}
+                className="w-full px-4 py-2.5 bg-[#090a0f] border border-neutral-900 focus:border-indigo-900 text-neutral-200 placeholder-neutral-600 rounded-xl text-base sm:text-xs focus:outline-none focus:ring-0 transition-all font-sans"
               />
             </div>
 
-            {/* Standard Send button */}
-            <button
-              type="submit"
-              disabled={!text.trim()}
-              title="Send encrypted message"
-              aria-label="Send encrypted message"
-              className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-[#121212] text-white disabled:text-neutral-600 p-2.5 rounded-xl border border-indigo-500/20 disabled:border-neutral-850/40 transition cursor-pointer disabled:cursor-not-allowed min-w-[44px] min-h-[44px] flex items-center justify-center"
-            >
-              <Send size={14} />
-            </button>
+            {text.trim() ? (
+              /* Standard Send button */
+              <button
+                type="submit"
+                title="Send encrypted message"
+                aria-label="Send encrypted message"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-xl border border-indigo-500/20 transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-[0.97]"
+              >
+                <Send size={14} />
+              </button>
+            ) : (
+              /* Microphone button for voice notes (holding triggers voice recorder) */
+              <button
+                type="button"
+                onMouseDown={handleMicPressStart}
+                onTouchStart={handleMicPressStart}
+                title="Hold to record voice note"
+                aria-label="Hold to record voice note"
+                className="bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-400 hover:text-indigo-400 p-2.5 rounded-xl transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-[0.97] select-none touch-none"
+              >
+                <Mic size={14} />
+              </button>
+            )}
           </form>
         )}
       </div>
