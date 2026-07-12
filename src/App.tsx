@@ -195,11 +195,13 @@ export default function App() {
                 <SecretMessengerScreen
                   settings={settings}
                   onLock={() => navigate('wiki_lock')}
+                  onExitToCalculator={() => navigate('calculator')}
                   onOpenSettings={() => navigate('settings')}
                   onOpenVault={() => navigate('vault')}
                   showToast={showToast}
                   directTargetUser={pendingShortcutUser}
                   clearDirectTargetUser={() => setPendingShortcutUser(null)}
+                  appAccessKey={password}
                 />
               )}
 

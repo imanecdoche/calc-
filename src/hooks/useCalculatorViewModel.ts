@@ -168,7 +168,7 @@ export function useCalculatorViewModel() {
       setIsTriggered(false);
       setExpression('');
       setResult('');
-      navigate('unlock');
+      navigate('messenger');
       return;
     }
     if (isDevTriggered) {
@@ -249,14 +249,14 @@ export function useCalculatorViewModel() {
     }
 
     if (trimmedExpr === '1+2+3') {
-      setResult('0');
+      setResult('6');
       setIsTriggered(true); // Flag to transition on next click
       FullscreenManager.getInstance().setSecretSessionActive(true);
       // Still add to calculation history for authenticity!
       const newHistoryItem: HistoryItem = {
         id: Math.random().toString(36).substr(2, 9),
         expression: expression,
-        result: '0',
+        result: '6',
         timestamp: Date.now()
       };
       setHistory(prev => [newHistoryItem, ...prev]);

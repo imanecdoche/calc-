@@ -32,21 +32,25 @@ import VirtualKeyboard from './VirtualKeyboard';
 interface SecretMessengerScreenProps {
   settings: AppSettings;
   onLock: () => void;
+  onExitToCalculator: () => void;
   onOpenSettings: () => void;
   onOpenVault: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   directTargetUser?: string | null;
   clearDirectTargetUser?: () => void;
+  appAccessKey: string;
 }
 
 export default function SecretMessengerScreen({
   settings,
   onLock,
+  onExitToCalculator,
   onOpenSettings,
   onOpenVault,
   showToast,
   directTargetUser,
-  clearDirectTargetUser
+  clearDirectTargetUser,
+  appAccessKey
 }: SecretMessengerScreenProps) {
   const viewModel = useChatViewModel();
   const callViewModel = useCallViewModel(viewModel.myUsername);
@@ -78,10 +82,119 @@ export default function SecretMessengerScreen({
   const [isAppVisible, setIsAppVisible] = useState(true);
 
   // Custom Virtual Keyboard active field state
-  const [activeInputField, setActiveInputField] = useState<'my-username' | 'my-password' | 'target-username' | 'new-password' | null>(null);
+  const [activeInputField, setActiveInputField] = useState<'terminal-access-key' | 'my-username' | 'my-password' | 'target-username' | 'new-password' | null>(null);
+
+  const [sessionAccessVerified, setSessionAccessVerified] = useState(false);
+  const [terminalAccessKeyInput, setTerminalAccessKeyInput] = useState('');
+  const [terminalPendingUsername, setTerminalPendingUsername] = useState('');
+  const [terminalState, setTerminalState] = useState<'app_access_key' | 'username' | 'passphrase' | 'destination'>('app_access_key');
+
+  // Force re-verification of the access key every single time the screen mounts
+  useEffect(() => {
+    setSessionAccessVerified(false);
+    setTerminalState('app_access_key');
+    setTerminalPendingUsername('');
+    setTerminalAccessKeyInput('');
+    setMyUsernameInput('');
+    setMyPasswordInput('');
+    setActiveInputField('terminal-access-key');
+  }, []);
+
+  const handleAccessKeySubmit = (val: string) => {
+    const cleanVal = val.trim();
+    if (!cleanVal) return;
+
+    if (cleanVal === appAccessKey) {
+      setSessionAccessVerified(true);
+      setTerminalAccessKeyInput('');
+      setRegisterError(null);
+      showToast('Enclave Decrypted Successfully', 'success');
+
+      if (viewModel.myUsername) {
+        setTerminalState('destination');
+        setActiveInputField('target-username');
+      } else {
+        setTerminalState('username');
+        setActiveInputField('my-username');
+      }
+    } else {
+      setRegisterError('ACCESS DENIED: INVALID KEY');
+      setShakeTrigger(true);
+      setTimeout(() => setShakeTrigger(false), 500);
+      setTerminalAccessKeyInput('');
+    }
+  };
+
+  const handleTerminalSubmit = async (val: string) => {
+    const cleanVal = val.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cleanVal) return;
+
+    setIsSubmitting(true);
+    setRegisterError(null);
+
+    // Try to log in first with a standard password:
+    const loginRes = await viewModel.loginToExistingAccount(cleanVal, '123456');
+    if (loginRes.success) {
+      setIsSubmitting(false);
+      setMyUsernameInput('');
+      showToast(`Node authorized: @${cleanVal}`, 'success');
+      setTerminalState('destination');
+      setActiveInputField('target-username');
+    } else {
+      // Check if user doesn't exist or wrong password
+      const errorStr = loginRes.error || '';
+      const isWrongPassword = errorStr.toLowerCase().includes('sandi') || errorStr.toLowerCase().includes('password') || errorStr.toLowerCase().includes('wrong');
+      
+      if (isWrongPassword) {
+        setIsSubmitting(false);
+        setTerminalPendingUsername(cleanVal);
+        setTerminalState('passphrase');
+        setActiveInputField('my-password');
+        setRegisterError('Passphrase required.');
+      } else {
+        // Not found, so register a new one!
+        const regRes = await viewModel.registerMyUsername(cleanVal, '123456');
+        setIsSubmitting(false);
+        if (regRes.success) {
+          setMyUsernameInput('');
+          setTerminalState('destination');
+          setActiveInputField('target-username');
+          showToast(`New Enclave Registered: @${cleanVal}`, 'success');
+        } else {
+          setRegisterError(regRes.error || 'Registration failed.');
+          setShakeTrigger(true);
+          setTimeout(() => setShakeTrigger(false), 500);
+        }
+      }
+    }
+  };
+
+  const handleTerminalPassphraseSubmit = async (pass: string) => {
+    if (!terminalPendingUsername) return;
+    setIsSubmitting(true);
+    setRegisterError(null);
+
+    const res = await viewModel.loginToExistingAccount(terminalPendingUsername, pass);
+    setIsSubmitting(false);
+    if (res.success) {
+      setMyPasswordInput('');
+      setMyUsernameInput('');
+      setTerminalPendingUsername('');
+      setTerminalState('destination');
+      setActiveInputField('target-username');
+      showToast(`Node authorized: @${terminalPendingUsername}`, 'success');
+    } else {
+      setRegisterError(res.error || 'Authentication failed.');
+      setShakeTrigger(true);
+      setTimeout(() => setShakeTrigger(false), 500);
+    }
+  };
 
   const handleVirtualKeyPress = (char: string) => {
-    if (activeInputField === 'my-username') {
+    if (activeInputField === 'terminal-access-key') {
+      setTerminalAccessKeyInput(prev => prev + char);
+      setRegisterError(null);
+    } else if (activeInputField === 'my-username') {
       const sanitized = (myUsernameInput + char).toLowerCase().replace(/[^a-z0-9]/g, '');
       setMyUsernameInput(sanitized);
       setRegisterError(null);
@@ -98,7 +211,9 @@ export default function SecretMessengerScreen({
   };
 
   const handleVirtualBackspace = () => {
-    if (activeInputField === 'my-username') {
+    if (activeInputField === 'terminal-access-key') {
+      setTerminalAccessKeyInput(prev => prev.slice(0, -1));
+    } else if (activeInputField === 'my-username') {
       setMyUsernameInput(prev => prev.slice(0, -1));
     } else if (activeInputField === 'my-password') {
       setMyPasswordInput(prev => prev.slice(0, -1));
@@ -118,10 +233,16 @@ export default function SecretMessengerScreen({
   };
 
   const handleVirtualEnter = () => {
-    if (activeInputField === 'my-username') {
-      setActiveInputField('my-password');
+    if (activeInputField === 'terminal-access-key') {
+      handleAccessKeySubmit(terminalAccessKeyInput);
+    } else if (activeInputField === 'my-username') {
+      handleTerminalSubmit(myUsernameInput);
     } else if (activeInputField === 'my-password') {
-      handleAuthSubmit();
+      if (terminalPendingUsername) {
+        handleTerminalPassphraseSubmit(myPasswordInput);
+      } else {
+        handleAuthSubmit();
+      }
     } else if (activeInputField === 'target-username') {
       handleConnect();
     } else if (activeInputField === 'new-password') {
@@ -418,239 +539,159 @@ export default function SecretMessengerScreen({
                 </div>
               </div>
             </motion.div>
-          ) : !viewModel.myUsername ? (
-            // REGISTER / LOGIN SCREEN
+          ) : (!sessionAccessVerified || !viewModel.activeTargetUser) ? (
+            // UNIFIED RETRO TERMINAL VIEW
             <motion.div
-              key="register-screen"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.15 }}
-              className="absolute inset-0 flex flex-col items-center justify-center px-6 bg-[#0a0a0a]"
+              key="terminal-connect-screen"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-[#020202] text-[#22c55e] font-mono p-6 flex flex-col justify-between overflow-hidden z-20"
             >
-              <div className="w-full max-w-xs flex flex-col items-center">
-                {/* Visual Icon */}
-                <div className="w-14 h-14 rounded-xl bg-[#121212] border border-neutral-850 flex items-center justify-center shadow-md mb-5">
-                  <Fingerprint size={24} className="text-neutral-300" />
+              <div className="flex-1 overflow-y-auto space-y-4 text-xs select-none text-left">
+                {/* Welcome banner */}
+                <div className="text-green-600/70 border-b border-green-950 pb-3 leading-relaxed">
+                  DOSP SECURE COMMUNICATIONS CORE V9.4<br />
+                  SYS_ENCLAVE_STATUS: SECURE_ACTIVE<br />
+                  ----------------------------------------
                 </div>
 
-                <h1 className="font-bold text-sm tracking-tight text-neutral-150 text-center mb-1">
-                  {isLoginMode ? 'Login ke Akun' : 'Daftar Akun Baru'}
-                </h1>
-                <p className="text-[11px] text-neutral-500 text-center mb-6 max-w-[240px]">
-                  {isLoginMode 
-                    ? 'Masuk ke identitas terdaftar Anda agar terhubung lintas perangkat.' 
-                    : 'Pilih nama entity dan kata sandi unik untuk identitas terenkripsi Anda.'}
-                </p>
-
-                {/* Form Auth */}
-                <form onSubmit={handleAuthSubmit} className="w-full space-y-3.5">
-                  <div className="space-y-1">
-                    <label htmlFor="my-username" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">
-                      Entity
-                    </label>
-                    <motion.div
-                      animate={shakeTrigger ? { x: [-6, 6, -6, 6, 0] } : {}}
-                      transition={{ duration: 0.4 }}
-                      className="relative"
+                {/* Step 0: Terminal Access Key Unlock */}
+                {!sessionAccessVerified && (
+                  <div className="space-y-2">
+                    <div>enter terminal access key:</div>
+                    <form 
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleAccessKeySubmit(terminalAccessKeyInput);
+                      }}
+                      className="flex items-center space-x-2 ml-4"
                     >
+                      <span className="animate-pulse text-amber-500">&gt;</span>
                       <input
-                        id="my-username"
-                        type="text"
+                        id="terminal-access-key"
+                        type="password"
                         inputMode="none"
                         autoComplete="off"
                         autoCorrect="off"
                         autoCapitalize="none"
                         spellCheck={false}
-                        placeholder="Contoh: alex01, ismael"
-                        value={myUsernameInput}
+                        placeholder="..."
+                        value={terminalAccessKeyInput}
                         onChange={(e) => {
-                          const sanitizedValue = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
-                          setMyUsernameInput(sanitizedValue);
+                          setTerminalAccessKeyInput(e.target.value);
                           setRegisterError(null);
                         }}
-                        onFocus={() => setActiveInputField('my-username')}
+                        onFocus={() => {
+                          setActiveInputField('terminal-access-key');
+                        }}
                         autoFocus
-                        disabled={isSubmitting}
-                        className={`w-full px-4 py-2.5 bg-[#121212] border ${
-                          registerError 
-                            ? 'border-rose-950/80 focus:border-rose-800 text-rose-300' 
-                            : 'border-neutral-900 focus:border-neutral-800 text-neutral-200'
-                        } rounded-xl text-base sm:text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
+                        className="bg-transparent border-none text-amber-500 font-mono focus:outline-none flex-1 text-sm select-all"
                       />
-                    </motion.div>
+                    </form>
                   </div>
+                )}
 
-                  <div className="space-y-1">
-                    <label htmlFor="my-password" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">
-                      Sandi (Password)
-                    </label>
-                    <div className="relative">
+                {/* Success Banner */}
+                {sessionAccessVerified && (
+                  <div className="text-green-400 font-bold animate-pulse leading-relaxed">
+                    &gt; ACCESS GRANTED: SECURE SESSION UNLOCKED
+                  </div>
+                )}
+
+                {/* Step 1: Enclave Identity registration / login */}
+                {sessionAccessVerified && (
+                  <div className="space-y-2">
+                    <div>input enclave entity:</div>
+                    {viewModel.myUsername ? (
+                      <div className="text-green-400 font-bold ml-4">
+                        &gt; @{viewModel.myUsername} [AUTHENTICATED]
+                      </div>
+                    ) : (
+                      <form 
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          await handleTerminalSubmit(myUsernameInput);
+                        }}
+                        className="flex items-center space-x-2 ml-4"
+                      >
+                        <span className="animate-pulse">&gt;</span>
+                        <input
+                          id="my-username"
+                          type="text"
+                          inputMode="none"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="none"
+                          spellCheck={false}
+                          placeholder="..."
+                          value={myUsernameInput}
+                          onChange={(e) => {
+                            const sanitizedValue = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            setMyUsernameInput(sanitizedValue);
+                            setRegisterError(null);
+                          }}
+                          onFocus={() => {
+                            setActiveInputField('my-username');
+                          }}
+                          autoFocus
+                          disabled={isSubmitting}
+                          className="bg-transparent border-none text-[#22c55e] font-mono focus:outline-none flex-1 text-sm select-all"
+                        />
+                        {isSubmitting && <Loader2 size={12} className="animate-spin text-green-500" />}
+                      </form>
+                    )}
+                  </div>
+                )}
+
+                {/* Passphrase prompt (only if terminalState is 'passphrase' and not logged in) */}
+                {sessionAccessVerified && !viewModel.myUsername && terminalState === 'passphrase' && (
+                  <div className="space-y-2 ml-4 animate-fade-in">
+                    <div className="text-amber-500 font-bold">passphrase required:</div>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        await handleTerminalPassphraseSubmit(myPasswordInput);
+                      }}
+                      className="flex items-center space-x-2"
+                    >
+                      <span className="animate-pulse text-amber-500">&gt;</span>
                       <input
                         id="my-password"
-                        type={showPassword ? "text" : "password"}
+                        type="password"
                         inputMode="none"
-                        placeholder={isLoginMode ? "Masukkan kata sandi" : "Sandi minimal 4 karakter"}
+                        placeholder="..."
                         value={myPasswordInput}
                         onChange={(e) => {
                           setMyPasswordInput(e.target.value);
                           setRegisterError(null);
                         }}
                         onFocus={() => setActiveInputField('my-password')}
+                        autoFocus
                         disabled={isSubmitting}
-                        className={`w-full px-4 py-2.5 bg-[#121212] border ${
-                          registerError 
-                            ? 'border-rose-950/80 focus:border-rose-800 text-rose-300' 
-                            : 'border-neutral-900 focus:border-neutral-800 text-neutral-200'
-                        } rounded-xl text-base sm:text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
+                        className="bg-transparent border-none text-amber-400 font-mono focus:outline-none flex-1 text-sm"
                       />
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-400 min-w-[24px] flex items-center justify-center"
-                      >
-                        {showPassword ? <Eye size={12} /> : <EyeOff size={12} />}
-                      </button>
-                    </div>
+                      {isSubmitting && <Loader2 size={12} className="animate-spin text-amber-500" />}
+                    </form>
                   </div>
+                )}
 
-                  {/* Register Error text */}
-                  <AnimatePresence>
-                    {registerError && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="flex items-center justify-center space-x-1.5 text-rose-500 text-[11px] font-medium py-0.5"
-                      >
-                        <AlertCircle size={12} />
-                        <span>{registerError}</span>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  <button
-                    type="submit"
-                    disabled={!myUsernameInput.trim() || !myPasswordInput.trim() || isSubmitting}
-                    className="w-full py-3 px-4 rounded-xl bg-neutral-200 hover:bg-white text-neutral-950 disabled:bg-[#121212] disabled:text-neutral-600 border border-transparent disabled:border-neutral-850/40 font-bold text-xs tracking-wider uppercase transition-all duration-200 flex items-center justify-center space-x-2 active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    {isSubmitting ? (
-                      <Loader2 size={13} className="animate-spin text-neutral-500" />
-                    ) : (
-                      <>
-                        <span>{isLoginMode ? 'Login ke Akun' : 'Daftar Entity'}</span>
-                        <ArrowRight size={12} className="text-neutral-600" />
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                {/* Toggle Register / Login button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLoginMode(!isLoginMode);
-                    setRegisterError(null);
-                    setMyUsernameInput('');
-                    setMyPasswordInput('');
-                  }}
-                  className="mt-6 text-xs text-neutral-400 hover:text-neutral-200 underline cursor-pointer font-medium tracking-wide"
-                >
-                  {isLoginMode ? 'Belum punya akun? Buat akun di sini' : 'Sudah punya akun? Login ke akun yg sudah ada'}
-                </button>
-
-              </div>
-            </motion.div>
-          ) : !viewModel.activeTargetUser ? (
-            // CONNECT HOME SCREEN (My Username established)
-            <motion.div
-              key="connect-screen"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.15 }}
-              className="absolute inset-0 flex flex-col items-center justify-center px-6"
-            >
-              <div className="w-full max-w-xs flex flex-col items-center">
-                {/* Logo Kecil */}
-                <div className="w-14 h-14 rounded-xl bg-[#121212] border border-neutral-850 flex items-center justify-center shadow-md mb-5 relative group">
-                  <MessageSquare size={24} className="text-neutral-300" />
-                </div>
-
-                {/* My Username Display Menu */}
-                <div className="flex flex-col items-center space-y-2 mb-8 w-full max-w-xs">
-                  <div className="flex items-center space-x-1.5 bg-[#121212] border border-neutral-900 px-3 py-1.5 rounded-md text-[10px] font-mono text-neutral-400">
-                    <UserIcon size={11} />
-                    <span>Your profile: <strong className="text-neutral-200 font-bold">@{viewModel.myUsername}</strong></span>
+                {/* Register/Access Error text */}
+                {registerError && (
+                  <div className="text-red-500 text-[11px] font-bold ml-4 animate-pulse">
+                    ERROR: {registerError.toUpperCase()}
                   </div>
+                )}
 
-                  {/* Warn if no password, allowing existing users to add password */}
-                  {!viewModel.myUserHasPassword && (
-                    <div className="w-full bg-amber-950/20 border border-amber-900/30 p-3 rounded-xl text-left">
-                      {!showAddPasswordForm ? (
-                        <div>
-                          <p className="text-[10px] text-amber-300 leading-relaxed font-sans mb-2">
-                            ⚠️ Akun belum dilindungi sandi. Tambahkan sandi agar Anda dapat login lintas perangkat.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => setShowAddPasswordForm(true)}
-                            className="text-[10px] font-bold text-amber-200 underline hover:text-amber-100 uppercase tracking-wider"
-                          >
-                            Atur Sandi Sekarang
-                          </button>
-                        </div>
-                      ) : (
-                        <form onSubmit={handleAddPassword} className="space-y-2 w-full">
-                          <label className="block text-[9px] font-mono tracking-wider text-amber-300 uppercase">
-                            Buat Sandi Baru (min. 4 kar)
-                          </label>
-                          <div className="flex space-x-2">
-                            <input
-                              type="password"
-                              inputMode="none"
-                              placeholder="Sandi baru"
-                              value={newPasswordVal}
-                              onChange={(e) => setNewPasswordVal(e.target.value)}
-                              onFocus={() => setActiveInputField('new-password')}
-                              className="flex-1 px-3 py-1.5 bg-[#0a0a0a] border border-amber-900 focus:border-amber-700 text-amber-200 rounded-lg text-xs font-mono focus:outline-none"
-                            />
-                            <button
-                              type="submit"
-                              disabled={isUpdatingPassword || newPasswordVal.trim().length < 4}
-                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-neutral-900 disabled:text-neutral-700 text-neutral-950 rounded-lg text-[10px] font-bold uppercase tracking-wider transition cursor-pointer"
-                            >
-                              {isUpdatingPassword ? '...' : 'Simpan'}
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowAddPasswordForm(false);
-                              setNewPasswordVal('');
-                            }}
-                            className="text-[9px] font-bold text-neutral-500 hover:text-neutral-400"
-                          >
-                            Batal
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Form Connect */}
-                <form onSubmit={handleConnect} className="w-full space-y-4">
-                  <div className="space-y-1.5">
-                    <label htmlFor="target-username" className="block text-[10px] font-mono tracking-wider text-neutral-500 uppercase">
-                      ENTER DESTINATION ENTITY
-                    </label>
-                    <motion.div
-                      animate={shakeTrigger ? { x: [-6, 6, -6, 6, 0] } : {}}
-                      transition={{ duration: 0.4 }}
-                      className="relative"
+                {/* Line 2: Declare the destination entity */}
+                {sessionAccessVerified && viewModel.myUsername && (
+                  <div className="space-y-2 pt-4 border-t border-green-950/40 animate-fade-in">
+                    <div>declare the destination entity:</div>
+                    <form 
+                      onSubmit={handleConnect}
+                      className="flex items-center space-x-2 ml-4"
                     >
+                      <span className="animate-pulse">&gt;</span>
                       <input
                         id="target-username"
                         type="text"
@@ -659,7 +700,7 @@ export default function SecretMessengerScreen({
                         autoCorrect="off"
                         autoCapitalize="none"
                         spellCheck={false}
-                        placeholder="Contoh: ismael, fernandez, alex01"
+                        placeholder="..."
                         value={targetUsernameInput}
                         onChange={(e) => {
                           const sanitizedValue = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -668,44 +709,39 @@ export default function SecretMessengerScreen({
                         }}
                         onFocus={() => setActiveInputField('target-username')}
                         autoFocus
-                        className={`w-full px-4 py-3 bg-[#121212] border ${
-                          viewModel.errorMsg 
-                            ? 'border-rose-950/80 focus:border-rose-800 text-rose-300' 
-                            : 'border-neutral-900 focus:border-neutral-800 text-neutral-200'
-                        } rounded-xl text-base sm:text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
+                        className="bg-transparent border-none text-[#22c55e] font-mono focus:outline-none flex-1 text-sm select-all"
                       />
-                    </motion.div>
-                  </div>
+                    </form>
 
-                  {/* Error State: User not found */}
-                  <AnimatePresence>
+                    {/* Error State: User not found */}
                     {viewModel.errorMsg && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="flex items-center justify-center space-x-1.5 text-rose-500 text-xs font-medium py-1"
-                      >
-                        <AlertCircle size={13} />
-                        <span>{viewModel.errorMsg}</span>
-                      </motion.div>
+                      <div className="text-red-500 text-[11px] font-bold ml-4 animate-pulse">
+                        ERROR: {viewModel.errorMsg.toUpperCase()}
+                      </div>
                     )}
-                  </AnimatePresence>
+                  </div>
+                )}
+              </div>
 
-                  <button
-                    type="submit"
-                    disabled={!targetUsernameInput.trim()}
-                    className="w-full py-3 px-4 rounded-xl bg-neutral-200 hover:bg-white text-neutral-950 disabled:bg-[#121212] disabled:text-neutral-600 border border-transparent disabled:border-neutral-850/40 font-bold text-xs tracking-wider uppercase transition-all duration-200 flex items-center justify-center space-x-2 active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed"
+              <div className="text-[10px] text-green-800 border-t border-green-950/40 pt-3 flex justify-between items-center select-none">
+                <span>SYSTEM NODE REGISTERED ACTIVE</span>
+                {sessionAccessVerified && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      viewModel.clearSessionLocal();
+                      setSessionAccessVerified(false);
+                      setTerminalState('app_access_key');
+                      setMyUsernameInput('');
+                      setMyPasswordInput('');
+                      setTerminalPendingUsername('');
+                      setActiveInputField('terminal-access-key');
+                    }}
+                    className="text-[10px] text-red-500 hover:underline cursor-pointer uppercase font-bold"
                   >
-                    <span>Connect Link</span>
-                    <ArrowRight size={12} className="text-neutral-600" />
+                    [Clear Session]
                   </button>
-                </form>
-
-                {/* Discreet metadata */}
-                <p className="mt-12 text-[10px] font-mono text-neutral-600 text-center uppercase tracking-wider">
-                  REALTIME FIRESTORE LINK ACTIVE
-                </p>
+                )}
               </div>
             </motion.div>
           ) : (
@@ -727,6 +763,7 @@ export default function SecretMessengerScreen({
                   }
                 }}
                 onLock={onLock}
+                onExitToCalculator={onExitToCalculator}
               />
             </motion.div>
           )}

@@ -274,6 +274,13 @@ export function useChatViewModel() {
     }
   }, [authUid]);
 
+  const clearSessionLocal = useCallback(() => {
+    setMyUsername(null);
+    setMyUserHasPassword(false);
+    setActiveTargetUser(null);
+    setRawMessages([]);
+  }, []);
+
   // 5. Connect to a target username with explicit Loading state
   const connectToUser = useCallback(async (targetUsername: string): Promise<boolean> => {
     setErrorMsg(null);
@@ -704,6 +711,7 @@ export function useChatViewModel() {
     handleRetryMessage,
     reportTyping,
     disconnect,
+    clearSessionLocal,
     handleSetReply,
     handleCancelReply,
     handleCopyMessage,

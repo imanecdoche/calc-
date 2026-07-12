@@ -264,6 +264,47 @@ export default function SettingsScreen({
 
   const changelogs: ChangelogEntry[] = [
     {
+      version: 'v2.5.2',
+      date: '2026-07-12',
+      changes: [
+        { type: 'improved', text: 'Memperbaiki logika terminal agar masukan Kunci Akses (1234) memvalidasi enkripsi terminal terlebih dahulu alih-alih mendaftarkan @1234 sebagai nama entity' }
+      ]
+    },
+    {
+      version: 'v2.5.1',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Mengamankan terminal agar selalu meminta verifikasi Access Key (Akses Kunci) saat masuk dari pintasan matematika kalkulator' },
+        { type: 'improved', text: 'Mencegah bypass otentikasi otomatis yang disebabkan oleh cache profil Firebase' }
+      ]
+    },
+    {
+      version: 'v2.5.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Menghubungkan pintasan kalkulator rahasia 1+2+3 diikuti "=" dua kali langsung menuju ke terminal retro akses kunci' },
+        { type: 'improved', text: 'Operasi 1+2+3 sekarang mengembalikan hasil riil 6 untuk penyamaran kalkulator yang presisi dan realistis' }
+      ]
+    },
+    {
+      version: 'v2.4.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Mengubah tampilan layar access key (login/register) dan layar input entity tujuan menjadi satu kesatuan aliran Terminal Retro' },
+        { type: 'added', text: 'Mendukung prompt input api key access dan prompt declare the destination entity di halaman terminal yang sama dengan inline cursor' },
+        { type: 'improved', text: 'Integrasi penuh dengan keyboard fisik dan on-screen digital keyboard kustom' }
+      ]
+    },
+    {
+      version: 'v2.3.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Simulasi hacking interaktif dengan running code log & progress bar realistis selama 6 detik saat mendeteksi shake hp, tombol exit, tombol lock, atau lock layar' },
+        { type: 'added', text: 'Transisi Pitch Black blackout selama 2 detik sebelum aman dialihkan kembali ke kalkulator' },
+        { type: 'improved', text: 'Dukungan double-click header obrolan dan Alt+S sebagai simulasi testing guncangan (shake) di browser desktop' }
+      ]
+    },
+    {
       version: 'v2.2.0',
       date: '2026-07-12',
       changes: [

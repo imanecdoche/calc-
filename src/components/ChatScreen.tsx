@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowLeft, 
@@ -34,13 +34,145 @@ interface ChatScreenProps {
   settings: AppSettings;
   onStartVoiceCall: () => void;
   onLock: () => void;
+  onExitToCalculator: () => void;
 }
 
-export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLock }: ChatScreenProps) {
+export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLock, onExitToCalculator }: ChatScreenProps) {
   const [text, setText] = useState('');
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [isFooterActive, setIsFooterActive] = useState(false);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+
+  const [hackingActive, setHackingActive] = useState(false);
+  const [blackoutActive, setBlackoutActive] = useState(false);
+  const [hackingLogs, setHackingLogs] = useState<string[]>([]);
+  const [hackingProgress, setHackingProgress] = useState(0);
+
+  const triggerHackingSequence = useCallback(() => {
+    if (hackingActive || blackoutActive) return;
+    setHackingActive(true);
+    setHackingLogs([
+      "[SYS] INTENT DETECTED: FORCED ENCLAVE PURGE PROTOCOL DOSP V9.4...",
+      "[SYS] INTENT SOURCE: SYSTEM SHAKE OR SECURITY DISMISSAL."
+    ]);
+    setHackingProgress(0);
+
+    const startTime = Date.now();
+    const duration = 6000; // 6 seconds
+    const intervalTime = 120; // 120ms each line tick
+
+    const hexChars = "0123456789ABCDEF";
+    const getRandomHexLine = () => {
+      let hexPart = "";
+      for (let i = 0; i < 8; i++) {
+        hexPart += hexChars[Math.floor(Math.random() * 16)] + hexChars[Math.floor(Math.random() * 16)] + " ";
+      }
+      return `0x${Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6, '0')}: ${hexPart.trim()}  .....[WIPE_PENDING]`;
+    };
+
+    const logsList = [
+      `[SYS] LOCATING ACTIVE MEMORY CHANNELS FOR USER: @${viewModel.myUsername || 'anonymous'}...`,
+      "[MEM] SHREDDING ACTIVE CHAT PACKETS [AES-256-GCM KEY]",
+      "[NET] CLOSING MULTICAST ENCRYPTED WEB-SOCKETS",
+      "[SYS] DESTROYING LOCAL STORAGE AUTH CACHE",
+      "[DISK] FILLING STORAGE BLOCKS WITH SECURE ZERO-BYTES",
+      "[SYS] INJECTING DECOY ARTIFACTS...",
+      "[AUTH] ANNIHILATING IDENTITIES",
+      "[STACK] MEMORY COLD DUMP INITIATED",
+      "[SYS] REWRITING ENCLAVE SECTORS",
+      "[NET] PEER CONTEXT FLUSHED SUCCESSFULLY",
+      "[SUCCESS] MEMORY WIPED TOTAL.",
+      "[SYS] DISGUISING INTERFACE TO DECIME CALCULATOR..."
+    ];
+
+    let logIndex = 0;
+
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(100, Math.floor((elapsed / duration) * 100));
+      setHackingProgress(progress);
+
+      setHackingLogs((prev) => {
+        const nextLogs = [...prev];
+        if (Math.random() < 0.4 && logIndex < logsList.length) {
+          nextLogs.push(logsList[logIndex]);
+          logIndex++;
+        } else {
+          nextLogs.push(getRandomHexLine());
+        }
+        if (nextLogs.length > 35) {
+          nextLogs.shift();
+        }
+        return nextLogs;
+      });
+
+      if (elapsed >= duration) {
+        clearInterval(timer);
+        setHackingActive(false);
+        setBlackoutActive(true);
+
+        setTimeout(() => {
+          setBlackoutActive(false);
+          viewModel.disconnect();
+          onExitToCalculator();
+        }, 2000);
+      }
+    }, intervalTime);
+  }, [hackingActive, blackoutActive, viewModel.myUsername, viewModel.disconnect, onExitToCalculator]);
+
+  // Hook up shake, visibility change, and Alt+S keypress
+  useEffect(() => {
+    let lastX: number | null = null;
+    let lastY: number | null = null;
+    let lastZ: number | null = null;
+    const threshold = 18; // shake sensitivity
+
+    const handleMotion = (event: DeviceMotionEvent) => {
+      const accel = event.accelerationIncludingGravity;
+      if (!accel) return;
+      const { x, y, z } = accel;
+      if (x === null || y === null || z === null) return;
+
+      if (lastX !== null && lastY !== null && lastZ !== null) {
+        const deltaX = Math.abs(x - lastX);
+        const deltaY = Math.abs(y - lastY);
+        const deltaZ = Math.abs(z - lastZ);
+
+        if ((deltaX > threshold && deltaY > threshold) || 
+            (deltaX > threshold && deltaZ > threshold) || 
+            (deltaY > threshold && deltaZ > threshold)) {
+          triggerHackingSequence();
+        }
+      }
+
+      lastX = x;
+      lastY = y;
+      lastZ = z;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && (event.key === 's' || event.key === 'S' || event.key === 'h' || event.key === 'H')) {
+        triggerHackingSequence();
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        triggerHackingSequence();
+      }
+    };
+
+    window.addEventListener('devicemotion', handleMotion);
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('devicemotion', handleMotion);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [triggerHackingSequence]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -511,6 +643,43 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     return '[deployed]';
   };
 
+  if (blackoutActive) {
+    return (
+      <div className="absolute inset-0 bg-[#000000] z-50 flex items-center justify-center font-mono select-none animate-fade-in" />
+    );
+  }
+
+  if (hackingActive) {
+    return (
+      <div className="absolute inset-0 bg-[#020202] text-[#22c55e] font-mono p-6 flex flex-col justify-between overflow-hidden z-50 animate-fade-in select-none">
+        <div className="flex-1 overflow-y-auto terminal-scrollbar space-y-2 select-none text-left">
+          <div className="text-red-500 font-bold mb-4 animate-pulse">
+            *** SECURITY ALERT: FORCED ENCLAVE PURGE INSTIGATED ***
+          </div>
+          
+          {hackingLogs.map((log, idx) => (
+            <div key={idx} className="text-xs leading-relaxed break-all">
+              &gt; {log}
+            </div>
+          ))}
+          
+          <div className="pt-4 text-xs font-bold flex items-center space-x-2">
+            <span>ERASING MEMORY SEGMENTS:</span>
+            <span className="text-green-400 font-mono tracking-widest">[</span>
+            <span className="text-yellow-500 font-bold">
+              {"█".repeat(Math.floor(hackingProgress / 5)).padEnd(20, "░")}
+            </span>
+            <span className="text-green-400 font-mono tracking-widest">]</span>
+            <span className="text-green-400 font-bold">{hackingProgress}%</span>
+          </div>
+        </div>
+        <div className="text-[10px] text-green-800 border-t border-green-950 pt-3 select-none text-center">
+          SYSTEM SHREDDER DOSP v9.4 // SELF-DESTRUCT PRESET ENABLED
+        </div>
+      </div>
+    );
+  }
+
   if (!activeTargetUser) return null;
 
   return (
@@ -539,22 +708,23 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       ` }} />
       
       {/* 1. TERMINAL HEADER */}
-      <div className="flex flex-wrap items-center justify-between px-4 py-3 bg-[#020202] border-b border-green-950 text-xs font-mono text-[#22c55e] flex-none select-none">
+      <div 
+        onDoubleClick={triggerHackingSequence}
+        title="Double-click to simulate phone shake"
+        className="flex flex-wrap items-center justify-between px-4 py-3 bg-[#020202] border-b border-green-950 text-xs font-mono text-[#22c55e] flex-none select-none"
+      >
         <div className="flex items-center space-x-1">
           <span>&gt; entity: {activeTargetUser.displayName} [status: {formattedStatus}]</span>
         </div>
         <div className="flex items-center space-x-3 text-xs">
           <button 
-            onClick={() => disconnect()}
+            onClick={triggerHackingSequence}
             className="hover:text-green-300 font-bold hover:underline cursor-pointer transition py-1"
           >
             [back]
           </button>
           <button 
-            onClick={() => {
-              disconnect();
-              onLock();
-            }}
+            onClick={triggerHackingSequence}
             className="hover:text-red-400 font-bold hover:underline cursor-pointer transition text-red-500 py-1"
           >
             [lock]
@@ -831,10 +1001,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
               <button
                 type="button"
-                onClick={() => {
-                  setIsFooterActive(false);
-                  setIsKeyboardOpen(false);
-                }}
+                onClick={triggerHackingSequence}
                 className="hover:text-red-400 font-bold hover:underline cursor-pointer py-1 px-2 text-red-500"
               >
                 [exit]
