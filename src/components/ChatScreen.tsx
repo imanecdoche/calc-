@@ -13,7 +13,8 @@ import {
   Play,
   Pause,
   Loader2,
-  Phone
+  Phone,
+  Keyboard as KeyboardIcon
 } from 'lucide-react';
 import { ChatViewModelType } from '../hooks/ChatViewModel';
 import { MessageBubble } from './MessageBubble';
@@ -25,18 +26,75 @@ import { VoiceRecorderManager } from '../services/VoiceRecorderManager';
 import { VoiceNoteRepository } from '../repositories/VoiceNoteRepository';
 import { AudioPlayerManager } from '../services/AudioPlayerManager';
 import { WaveformView } from './WaveformView';
+import VirtualKeyboard from './VirtualKeyboard';
+import { AppSettings } from '../types';
 
 interface ChatScreenProps {
   viewModel: ChatViewModelType;
+  settings: AppSettings;
   onStartVoiceCall: () => void;
   onLock: () => void;
 }
 
-export default function ChatScreen({ viewModel, onStartVoiceCall, onLock }: ChatScreenProps) {
+export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLock }: ChatScreenProps) {
   const [text, setText] = useState('');
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const insertText = (char: string) => {
+    const input = inputRef.current;
+    if (!input) {
+      setText((prev) => prev + char);
+      reportTyping();
+      return;
+    }
+    const start = input.selectionStart ?? text.length;
+    const end = input.selectionEnd ?? text.length;
+    const newText = text.substring(0, start) + char + text.substring(end);
+    setText(newText);
+    reportTyping();
+
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + char.length, start + char.length);
+      scrollToBottom();
+    });
+  };
+
+  const handleBackspace = () => {
+    const input = inputRef.current;
+    if (!input) {
+      setText((prev) => prev.slice(0, -1));
+      reportTyping();
+      return;
+    }
+    const start = input.selectionStart ?? text.length;
+    const end = input.selectionEnd ?? text.length;
+
+    if (start === end) {
+      if (start === 0) return;
+      const newText = text.substring(0, start - 1) + text.substring(end);
+      setText(newText);
+      requestAnimationFrame(() => {
+        input.focus();
+        input.setSelectionRange(start - 1, start - 1);
+      });
+    } else {
+      const newText = text.substring(0, start) + text.substring(end);
+      setText(newText);
+      requestAnimationFrame(() => {
+        input.focus();
+        input.setSelectionRange(start, start);
+      });
+    }
+    reportTyping();
+  };
+
+  const handleSpace = () => {
+    insertText(' ');
+  };
 
   // Manage visual viewport height to prevent keyboard obscuring
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
@@ -707,15 +765,44 @@ export default function ChatScreen({ viewModel, onStartVoiceCall, onLock }: Chat
             onSubmit={handleSend}
             className="h-16 px-3.5 flex items-center space-x-2"
           >
+            {/* Custom Keyboard Toggle Button - Only visible if custom keyboard is selected in settings */}
+            {settings.keyboardType === 'custom' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsKeyboardOpen(!isKeyboardOpen);
+                  if (!isKeyboardOpen) {
+                    setTimeout(() => {
+                      inputRef.current?.focus();
+                      scrollToBottom();
+                    }, 100);
+                  }
+                }}
+                title={isKeyboardOpen ? "Sembunyikan Keyboard" : "Tampilkan Keyboard"}
+                aria-label={isKeyboardOpen ? "Sembunyikan Keyboard" : "Tampilkan Keyboard"}
+                className={`p-2.5 rounded-xl border transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-[0.97] ${
+                  isKeyboardOpen
+                    ? 'bg-indigo-950/40 border-indigo-900/60 text-indigo-400'
+                    : 'bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-400 hover:text-indigo-400'
+                }`}
+              >
+                <KeyboardIcon size={14} />
+              </button>
+            )}
+
             <div className="flex-1 relative flex items-center">
               <input
                 ref={inputRef}
                 type="text"
+                inputMode={settings.keyboardType === 'custom' ? 'none' : 'text'}
                 autoComplete="off"
                 placeholder={`Message ${activeTargetUser.displayName}...`}
                 value={text}
                 onChange={handleInputChange}
                 onFocus={() => {
+                  if (settings.keyboardType === 'custom') {
+                    setIsKeyboardOpen(true);
+                  }
                   setTimeout(() => {
                     scrollToBottom();
                   }, 150);
@@ -748,6 +835,21 @@ export default function ChatScreen({ viewModel, onStartVoiceCall, onLock }: Chat
               </button>
             )}
           </form>
+        )}
+
+        {/* Custom Native-App-style Virtual Keyboard */}
+        {settings.keyboardType === 'custom' && isKeyboardOpen && !isRecording && !recordedBlob && (
+          <div className="w-full">
+            <VirtualKeyboard
+              onKeyPress={insertText}
+              onBackspace={handleBackspace}
+              onSpace={handleSpace}
+              onEnter={() => handleSend()}
+              onClose={() => setIsKeyboardOpen(false)}
+              enterLabel="Kirim"
+              height={settings.keyboardHeight}
+            />
+          </div>
         )}
       </div>
 

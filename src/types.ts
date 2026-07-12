@@ -43,6 +43,16 @@ export interface AppSettings {
   fullscreen: boolean;
   theme: 'dark'; // Dark theme only, but extensible if needed
   isDegree: boolean;
+  keyboardType?: 'system' | 'custom';
+  keyboardHeight?: number;
+}
+
+export interface SecretShortcut {
+  id: string;
+  combination: string; // e.g. "001277"
+  targetUsername: string; // e.g. "anonim277"
+  requiresAccessKey: boolean; // true if it requires password unlock, false if it bypasses password unlock and opens chat room immediately
+  ownerUsername: string; // username of the account that created this shortcut
 }
 
 export interface ChangelogEntry {

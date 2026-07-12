@@ -23,14 +23,17 @@ import {
   HelpCircle,
   User as UserIcon,
   Eye,
-  EyeOff
+  EyeOff,
+  Keyboard as KeyboardIcon
 } from 'lucide-react';
-import { AppScreen, ChangelogEntry, AppSettings } from '../types';
+import { AppScreen, ChangelogEntry, AppSettings, SecretShortcut } from '../types';
 import { FullscreenManager } from '../services/FullscreenManager';
 import { useChatViewModel } from '../hooks/ChatViewModel';
+import { Zap, Plus, X } from 'lucide-react';
 
 interface SettingsScreenProps {
   settings: AppSettings;
+  setSettings?: React.Dispatch<React.SetStateAction<AppSettings>>;
   currentPasswordVal: string;
   changePassword: (newPass: string) => boolean;
   exportData: () => void;
@@ -40,10 +43,15 @@ interface SettingsScreenProps {
   getStorageUsage: () => string;
   onBack: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  isSecureEnclave?: boolean;
+  shortcuts?: SecretShortcut[];
+  addShortcut?: (shortcut: Omit<SecretShortcut, 'id'>) => void;
+  deleteShortcut?: (id: string) => void;
 }
 
 export default function SettingsScreen({
   settings,
+  setSettings,
   currentPasswordVal,
   changePassword,
   exportData,
@@ -52,7 +60,11 @@ export default function SettingsScreen({
   clearCache,
   getStorageUsage,
   onBack,
-  showToast
+  showToast,
+  isSecureEnclave = false,
+  shortcuts = [],
+  addShortcut,
+  deleteShortcut
 }: SettingsScreenProps) {
   // Passcode editing states
   const [editingPasscode, setEditingPasscode] = useState(false);
@@ -64,6 +76,8 @@ export default function SettingsScreen({
 
   // Chat Account password states
   const chatViewModel = useChatViewModel();
+  const myUsername = chatViewModel.myUsername || '';
+  const myShortcuts = shortcuts.filter(s => s.ownerUsername === myUsername);
   const [chatPasswordInput, setChatPasswordInput] = useState('');
   const [showChatPassword, setShowChatPassword] = useState(false);
   const [isUpdatingChatPassword, setIsUpdatingChatPassword] = useState(false);
@@ -108,6 +122,55 @@ export default function SettingsScreen({
       }
     } catch (e) {
       showToast('Fullscreen API not supported in this frame.', 'error');
+    }
+  };
+
+  // Shortcut states
+  const [shortcutCombination, setShortcutCombination] = useState('');
+  const [shortcutTargetUser, setShortcutTargetUser] = useState('');
+  const [shortcutRequiresAccessKey, setShortcutRequiresAccessKey] = useState(false);
+
+  const handleAddShortcutSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const activeUsername = chatViewModel.myUsername || '';
+    if (!activeUsername) {
+      showToast('Anda harus masuk ke akun Chat terlebih dahulu.', 'error');
+      return;
+    }
+
+    const cleanCombination = shortcutCombination.trim().replace(/\s+/g, '');
+    const cleanTargetUser = shortcutTargetUser.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    if (!cleanCombination) {
+      showToast('Kombinasi angka tidak boleh kosong.', 'error');
+      return;
+    }
+    if (!cleanTargetUser) {
+      showToast('Username target tidak boleh kosong.', 'error');
+      return;
+    }
+
+    // Check if the combination is already registered for this user
+    if (shortcuts.some(s => s.combination === cleanCombination && s.ownerUsername === activeUsername)) {
+      showToast('Kombinasi ini sudah digunakan oleh pintasan Anda yang lain.', 'error');
+      return;
+    }
+
+    if (cleanCombination === '1+2+3' || cleanCombination === '3+2+1') {
+      showToast('Kombinasi ini dicadangkan untuk sistem.', 'error');
+      return;
+    }
+
+    if (addShortcut) {
+      addShortcut({
+        combination: cleanCombination,
+        targetUsername: cleanTargetUser,
+        requiresAccessKey: shortcutRequiresAccessKey,
+        ownerUsername: activeUsername,
+      });
+      setShortcutCombination('');
+      setShortcutTargetUser('');
+      setShortcutRequiresAccessKey(false);
     }
   };
 
@@ -200,6 +263,24 @@ export default function SettingsScreen({
   };
 
   const changelogs: ChangelogEntry[] = [
+    {
+      version: 'v2.1.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Menambahkan pengaturan pilihan keyboard (Keyboard Sistem vs Keyboard Virtual)' },
+        { type: 'added', text: 'Menambahkan pengaturan tinggi (height) keyboard virtual native-app yang bisa disesuaikan' },
+        { type: 'improved', text: 'Integrasi otomatis preferensi keyboard per pengguna dengan sistem pencadangan JSON' }
+      ]
+    },
+    {
+      version: 'v2.0.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Menambahkan fitur Pintasan Rahasia (Secret Shortcuts) pada Numpad Kalkulator' },
+        { type: 'added', text: 'Integrasi bypass Kunci Akses (Access Key) opsional untuk masuk instan ke ruang obrolan tertentu' },
+        { type: 'added', text: 'Menambahkan pengaturan konfigurasi Pintasan Rahasia yang hanya muncul di lapisan Secure Enclave' }
+      ]
+    },
     {
       version: 'v1.9.0',
       date: '2026-07-12',
@@ -401,6 +482,129 @@ export default function SettingsScreen({
           )}
         </section>
 
+        {/* SECRET SHORTCUTS SECTION (ONLY IF IN SECURE ENCLAVE) */}
+        {isSecureEnclave && (
+          <section className="bg-[#121212] border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-sm">
+            <div className="flex items-center space-x-2.5 border-b border-neutral-900/60 pb-3">
+              <Zap className="text-amber-500 animate-pulse" size={14} />
+              <h2 className="font-bold text-xs tracking-wider uppercase text-neutral-300">Pintasan Rahasia (Secret Shortcuts)</h2>
+            </div>
+            
+            <p className="text-[11px] text-neutral-400 leading-relaxed">
+              Buat kombinasi angka rahasia pada numpad kalkulator untuk langsung masuk ke obrolan pengguna tertentu. Contoh: tekan <code className="px-1.5 py-0.5 bg-neutral-950 rounded text-amber-400 font-mono text-[10px]">001277</code> lalu klik <code className="px-1.5 py-0.5 bg-neutral-950 rounded text-neutral-300 font-mono text-[10px]">=</code> untuk langsung membuka ruang obrolan <span className="font-mono text-neutral-200 font-semibold">@anonim277</span>.
+            </p>
+
+            {!myUsername ? (
+              <div className="text-center py-5 bg-[#0a0a0a]/50 rounded-xl border border-neutral-900/60 p-4">
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Silakan masuk atau daftar akun Chat terlebih dahulu pada layar Secret Messenger untuk dapat mengelola pintasan rahasia Anda.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Form to Add Shortcut */}
+                <form onSubmit={handleAddShortcutSubmit} className="space-y-3 pt-1 border-t border-neutral-900/40">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label htmlFor="shortcut-comb" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">Kombinasi Angka Numpad *</label>
+                      <input
+                        id="shortcut-comb"
+                        type="text"
+                        pattern="[0-9+*/.-]*"
+                        placeholder="Contoh: 001277"
+                        value={shortcutCombination}
+                        onChange={(e) => setShortcutCombination(e.target.value)}
+                        className="w-full bg-[#0a0a0a] border border-neutral-850 rounded-xl px-3 py-2 text-xs text-neutral-150 font-mono outline-none focus:border-neutral-700 h-[40px]"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="shortcut-target" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">Username Kontak Target *</label>
+                      <input
+                        id="shortcut-target"
+                        type="text"
+                        placeholder="Contoh: anonim277"
+                        value={shortcutTargetUser}
+                        onChange={(e) => setShortcutTargetUser(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
+                        className="w-full bg-[#0a0a0a] border border-neutral-850 rounded-xl px-3 py-2 text-xs text-neutral-150 font-mono outline-none focus:border-neutral-700 h-[40px]"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Requires Access Key Toggle */}
+                  <div className="flex items-center justify-between py-1 px-3 bg-[#0a0a0a] rounded-xl border border-neutral-900">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-semibold text-neutral-300">Gunakan Kunci Akses (Access Key)</span>
+                      <span className="text-[9px] text-neutral-500">Minta password kalkulator dulu sebelum masuk chat.</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={shortcutRequiresAccessKey}
+                        onChange={(e) => setShortcutRequiresAccessKey(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600 peer-checked:after:bg-white peer-checked:after:border-amber-600"></div>
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!shortcutCombination.trim() || !shortcutTargetUser.trim()}
+                    className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:bg-neutral-900 disabled:text-neutral-600 text-neutral-950 font-bold text-xs uppercase tracking-wider transition-all duration-200 flex items-center justify-center space-x-1.5 active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed h-[44px]"
+                  >
+                    <Plus size={14} />
+                    <span>Buat Pintasan Rahasia</span>
+                  </button>
+                </form>
+
+                {/* List of Shortcuts */}
+                <div className="space-y-2 pt-2 border-t border-neutral-900/40">
+                  <h3 className="text-[10px] font-mono tracking-wider text-neutral-400 uppercase">Daftar Pintasan Aktif ({myShortcuts.length})</h3>
+                  {myShortcuts.length === 0 ? (
+                    <div className="text-center py-4 bg-[#0a0a0a]/50 rounded-xl border border-neutral-900/60">
+                      <p className="text-[10px] text-neutral-550">Belum ada pintasan rahasia yang dibuat untuk akun ini.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                      {myShortcuts.map((sh) => (
+                        <div
+                          key={sh.id}
+                          className="flex items-center justify-between p-3 rounded-xl bg-[#0a0a0a] border border-neutral-900"
+                        >
+                          <div className="flex flex-col space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-mono text-xs font-bold text-amber-400 bg-amber-950/20 px-2 py-0.5 rounded border border-amber-900/40">
+                                {sh.combination}
+                              </span>
+                              <span className="text-xs text-neutral-300 font-mono">
+                                → @{sh.targetUsername}
+                              </span>
+                            </div>
+                            <span className="text-[9px] text-neutral-500 font-medium">
+                              {sh.requiresAccessKey ? '🔒 Memerlukan Kunci Akses' : '⚡ Masuk Instan (Bypass Kunci)'}
+                            </span>
+                          </div>
+                          
+                          <button
+                            type="button"
+                            onClick={() => deleteShortcut && deleteShortcut(sh.id)}
+                            className="p-2 rounded-lg hover:bg-neutral-900/80 text-neutral-500 hover:text-rose-400 transition-all border border-transparent hover:border-neutral-850 min-w-[36px] min-h-[36px] flex items-center justify-center cursor-pointer"
+                            title="Hapus Pintasan"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
         {/* IDENTITAS AKUN SECRET CHAT */}
         <section className="bg-[#121212] border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-sm">
           <div className="flex items-center space-x-2.5 border-b border-neutral-900/60 pb-3">
@@ -540,6 +744,77 @@ export default function SettingsScreen({
             <span className="text-[10px] text-neutral-500 max-w-[220px] mt-1 leading-relaxed">
               Drag & drop your JSON backup file here, or <span className="text-neutral-400 underline">click to browse</span>.
             </span>
+          </div>
+        </section>
+
+        {/* KEYBOARD SETTINGS */}
+        <section className="bg-[#121212] border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-sm">
+          <div className="flex items-center space-x-2.5 border-b border-neutral-900/60 pb-3">
+            <KeyboardIcon className="text-neutral-400" size={14} />
+            <h2 className="font-bold text-xs tracking-wider uppercase text-neutral-300">Keyboard Preferences</h2>
+          </div>
+
+          <div className="space-y-4">
+            {/* Keyboard Type Selector */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-xs text-neutral-300 font-bold block">Tipe Keyboard Obrolan</span>
+                  <span className="text-[10px] text-neutral-500 mt-0.5 block">Pilih jenis input keyboard untuk mengetik di obrolan rahasia.</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 bg-[#0a0a0a] p-1 rounded-xl border border-neutral-900">
+                <button
+                  type="button"
+                  onClick={() => setSettings && setSettings(prev => ({ ...prev, keyboardType: 'system' }))}
+                  className={`py-2 px-3 text-xs rounded-lg font-medium transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                    settings.keyboardType === 'system'
+                      ? 'bg-neutral-850 border border-neutral-800 text-indigo-400 font-bold shadow-sm'
+                      : 'text-neutral-500 hover:text-neutral-350 border border-transparent'
+                  }`}
+                >
+                  <span>Keyboard Sistem</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettings && setSettings(prev => ({ ...prev, keyboardType: 'custom' }))}
+                  className={`py-2 px-3 text-xs rounded-lg font-medium transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                    settings.keyboardType === 'custom'
+                      ? 'bg-neutral-850 border border-neutral-800 text-indigo-400 font-bold shadow-sm'
+                      : 'text-neutral-500 hover:text-neutral-350 border border-transparent'
+                  }`}
+                >
+                  <span>Keyboard Virtual App</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Keyboard Height Slider */}
+            <div className={`space-y-2.5 transition-all duration-300 ${settings.keyboardType === 'custom' ? 'opacity-100' : 'opacity-40 select-none pointer-events-none'}`}>
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-xs text-neutral-300 font-bold block">Tinggi Keyboard Virtual</span>
+                  <span className="text-[10px] text-neutral-500 mt-0.5 block">Sesuaikan tinggi keyboard virtual native-app.</span>
+                </div>
+                <span className="font-mono text-[10px] font-bold text-indigo-400 bg-indigo-950/20 border border-indigo-900/30 px-2 py-0.5 rounded-md">
+                  {settings.keyboardHeight ?? 260}px
+                </span>
+              </div>
+              <div className="flex items-center space-x-3 bg-[#0a0a0a] p-3 rounded-xl border border-neutral-900/60">
+                <span className="text-[10px] font-mono text-neutral-550 select-none">200px</span>
+                <input
+                  type="range"
+                  min="200"
+                  max="360"
+                  step="10"
+                  disabled={settings.keyboardType !== 'custom'}
+                  value={settings.keyboardHeight ?? 260}
+                  onChange={(e) => setSettings && setSettings(prev => ({ ...prev, keyboardHeight: parseInt(e.target.value) }))}
+                  className="flex-1 accent-indigo-500 bg-neutral-900 h-1.5 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                />
+                <span className="text-[10px] font-mono text-neutral-550 select-none">360px</span>
+              </div>
+            </div>
           </div>
         </section>
 

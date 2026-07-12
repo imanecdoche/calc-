@@ -14,30 +14,39 @@ import {
   WifiOff,
   RefreshCw,
   EyeOff,
-  Eye
+  Eye,
+  Keyboard as KeyboardIcon
 } from 'lucide-react';
 import { useChatViewModel } from '../hooks/ChatViewModel';
 import ChatScreen from './ChatScreen';
 import { useCallViewModel } from '../hooks/CallViewModel';
 import CallOverlay from './CallOverlay';
 import { useDisguiseTrigger } from '../hooks/useDisguiseTrigger';
+import { AppSettings } from '../types';
 
 import { SecureWindowManager } from '../services/SecureWindowManager';
 import { SessionTimeoutManager } from '../services/SessionTimeoutManager';
 import { RecentTaskProtector } from '../services/RecentTaskProtector';
+import VirtualKeyboard from './VirtualKeyboard';
 
 interface SecretMessengerScreenProps {
+  settings: AppSettings;
   onLock: () => void;
   onOpenSettings: () => void;
   onOpenVault: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  directTargetUser?: string | null;
+  clearDirectTargetUser?: () => void;
 }
 
 export default function SecretMessengerScreen({
+  settings,
   onLock,
   onOpenSettings,
   onOpenVault,
-  showToast
+  showToast,
+  directTargetUser,
+  clearDirectTargetUser
 }: SecretMessengerScreenProps) {
   const viewModel = useChatViewModel();
   const callViewModel = useCallViewModel(viewModel.myUsername);
@@ -67,6 +76,58 @@ export default function SecretMessengerScreen({
 
   // Recent apps task protection state
   const [isAppVisible, setIsAppVisible] = useState(true);
+
+  // Custom Virtual Keyboard active field state
+  const [activeInputField, setActiveInputField] = useState<'my-username' | 'my-password' | 'target-username' | 'new-password' | null>(null);
+
+  const handleVirtualKeyPress = (char: string) => {
+    if (activeInputField === 'my-username') {
+      const sanitized = (myUsernameInput + char).toLowerCase().replace(/[^a-z0-9]/g, '');
+      setMyUsernameInput(sanitized);
+      setRegisterError(null);
+    } else if (activeInputField === 'my-password') {
+      setMyPasswordInput(prev => prev + char);
+      setRegisterError(null);
+    } else if (activeInputField === 'target-username') {
+      const sanitized = (targetUsernameInput + char).toLowerCase().replace(/[^a-z0-9]/g, '');
+      setTargetUsernameInput(sanitized);
+      viewModel.clearError();
+    } else if (activeInputField === 'new-password') {
+      setNewPasswordVal(prev => prev + char);
+    }
+  };
+
+  const handleVirtualBackspace = () => {
+    if (activeInputField === 'my-username') {
+      setMyUsernameInput(prev => prev.slice(0, -1));
+    } else if (activeInputField === 'my-password') {
+      setMyPasswordInput(prev => prev.slice(0, -1));
+    } else if (activeInputField === 'target-username') {
+      setTargetUsernameInput(prev => prev.slice(0, -1));
+    } else if (activeInputField === 'new-password') {
+      setNewPasswordVal(prev => prev.slice(0, -1));
+    }
+  };
+
+  const handleVirtualSpace = () => {
+    if (activeInputField === 'my-password') {
+      setMyPasswordInput(prev => prev + ' ');
+    } else if (activeInputField === 'new-password') {
+      setNewPasswordVal(prev => prev + ' ');
+    }
+  };
+
+  const handleVirtualEnter = () => {
+    if (activeInputField === 'my-username') {
+      setActiveInputField('my-password');
+    } else if (activeInputField === 'my-password') {
+      handleAuthSubmit();
+    } else if (activeInputField === 'target-username') {
+      handleConnect();
+    } else if (activeInputField === 'new-password') {
+      handleAddPassword();
+    }
+  };
 
   // Manage visual viewport height to prevent keyboard obscuring
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
@@ -116,9 +177,26 @@ export default function SecretMessengerScreen({
     };
   }, [onLock, viewModel, showToast]);
 
+  // Handle direct target user from secret shortcut
+  useEffect(() => {
+    if (viewModel.myUsername && directTargetUser) {
+      const target = directTargetUser;
+      if (clearDirectTargetUser) {
+        clearDirectTargetUser();
+      }
+      viewModel.connectToUser(target).then((success) => {
+        if (success) {
+          showToast(`Berhasil tersambung ke @${target}`, 'success');
+        } else {
+          showToast(`Gagal tersambung ke @${target}: User tidak ditemukan.`, 'error');
+        }
+      });
+    }
+  }, [viewModel.myUsername, directTargetUser, clearDirectTargetUser, viewModel.connectToUser, showToast]);
+
   // Handle register or login based on active mode
-  const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAuthSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const cleanUsername = myUsernameInput.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
     const cleanPassword = myPasswordInput.trim();
 
@@ -179,18 +257,18 @@ export default function SecretMessengerScreen({
   };
 
   // Handle adding password for existing user
-  const handleAddPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddPassword = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const cleanPassword = newPasswordVal.trim();
     if (!cleanPassword || cleanPassword.length < 4) {
       showToast('Sandi minimal harus 4 karakter.', 'error');
       return;
     }
-
+ 
     setIsUpdatingPassword(true);
     const res = await viewModel.updateMyPassword(cleanPassword);
     setIsUpdatingPassword(false);
-
+ 
     if (res.success) {
       showToast('Sandi berhasil ditambahkan! Anda sekarang bisa login di perangkat lain.', 'success');
       setNewPasswordVal('');
@@ -199,10 +277,10 @@ export default function SecretMessengerScreen({
       showToast(res.error || 'Gagal menambahkan sandi.', 'error');
     }
   };
-
+ 
   // Handle connecting to a target user
-  const handleConnect = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleConnect = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const cleanTarget = targetUsernameInput.trim().toLowerCase();
     if (!cleanTarget) return;
 
@@ -379,6 +457,7 @@ export default function SecretMessengerScreen({
                       <input
                         id="my-username"
                         type="text"
+                        inputMode="none"
                         autoComplete="off"
                         autoCorrect="off"
                         autoCapitalize="none"
@@ -390,6 +469,7 @@ export default function SecretMessengerScreen({
                           setMyUsernameInput(sanitizedValue);
                           setRegisterError(null);
                         }}
+                        onFocus={() => setActiveInputField('my-username')}
                         autoFocus
                         disabled={isSubmitting}
                         className={`w-full px-4 py-2.5 bg-[#121212] border ${
@@ -409,12 +489,14 @@ export default function SecretMessengerScreen({
                       <input
                         id="my-password"
                         type={showPassword ? "text" : "password"}
+                        inputMode="none"
                         placeholder={isLoginMode ? "Masukkan kata sandi" : "Sandi minimal 4 karakter"}
                         value={myPasswordInput}
                         onChange={(e) => {
                           setMyPasswordInput(e.target.value);
                           setRegisterError(null);
                         }}
+                        onFocus={() => setActiveInputField('my-password')}
                         disabled={isSubmitting}
                         className={`w-full px-4 py-2.5 bg-[#121212] border ${
                           registerError 
@@ -532,9 +614,11 @@ export default function SecretMessengerScreen({
                           <div className="flex space-x-2">
                             <input
                               type="password"
+                              inputMode="none"
                               placeholder="Sandi baru"
                               value={newPasswordVal}
                               onChange={(e) => setNewPasswordVal(e.target.value)}
+                              onFocus={() => setActiveInputField('new-password')}
                               className="flex-1 px-3 py-1.5 bg-[#0a0a0a] border border-amber-900 focus:border-amber-700 text-amber-200 rounded-lg text-xs font-mono focus:outline-none"
                             />
                             <button
@@ -575,6 +659,7 @@ export default function SecretMessengerScreen({
                       <input
                         id="target-username"
                         type="text"
+                        inputMode="none"
                         autoComplete="off"
                         autoCorrect="off"
                         autoCapitalize="none"
@@ -586,6 +671,7 @@ export default function SecretMessengerScreen({
                           setTargetUsernameInput(sanitizedValue);
                           viewModel.clearError();
                         }}
+                        onFocus={() => setActiveInputField('target-username')}
                         autoFocus
                         className={`w-full px-4 py-3 bg-[#121212] border ${
                           viewModel.errorMsg 
@@ -639,6 +725,7 @@ export default function SecretMessengerScreen({
             >
               <ChatScreen 
                 viewModel={viewModel} 
+                settings={settings}
                 onStartVoiceCall={() => {
                   if (viewModel.activeTargetUser) {
                     callViewModel.startCall(viewModel.activeTargetUser.username);
@@ -696,6 +783,36 @@ export default function SecretMessengerScreen({
       {/* 5. Voice Call Overlay */}
       {viewModel.myUsername && (
         <CallOverlay viewModel={callViewModel} myUsername={viewModel.myUsername} />
+      )}
+
+      {/* Global Virtual Keyboard Overlay for login/signup/connection inputs */}
+      {activeInputField && !viewModel.activeTargetUser && (
+        <div className="fixed bottom-0 left-0 right-0 z-[100] bg-neutral-950 border-t border-neutral-900/65 flex flex-col pb-[env(safe-area-inset-bottom,8px)] pt-1">
+          <div className="flex justify-between items-center px-4 py-1 text-xs text-neutral-500 font-mono select-none">
+            <span className="uppercase text-[9px] tracking-wider text-neutral-400 flex items-center gap-1.5">
+              <KeyboardIcon size={10} />
+              {activeInputField === 'my-username' && 'Ketik Username Anda'}
+              {activeInputField === 'my-password' && 'Ketik Sandi Anda'}
+              {activeInputField === 'target-username' && 'Ketik Username Tujuan'}
+              {activeInputField === 'new-password' && 'Buat Sandi Baru'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setActiveInputField(null)}
+              className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider px-2 py-1 bg-indigo-950/20 border border-indigo-900/30 rounded-md hover:text-indigo-300 transition cursor-pointer"
+            >
+              Selesai
+            </button>
+          </div>
+          <VirtualKeyboard
+            onKeyPress={handleVirtualKeyPress}
+            onBackspace={handleVirtualBackspace}
+            onSpace={handleVirtualSpace}
+            onEnter={handleVirtualEnter}
+            onClose={() => setActiveInputField(null)}
+            enterLabel={activeInputField === 'my-username' ? 'Lanjut' : 'Kirim'}
+          />
+        </div>
       )}
 
     </div>

@@ -44,6 +44,7 @@ export default function App() {
     vaultPasswords,
     vaultDiaries,
     settings,
+    setSettings,
     toast,
     showToast,
     
@@ -60,6 +61,12 @@ export default function App() {
     resetAllData,
     clearCache,
     getStorageUsage,
+    
+    shortcuts,
+    pendingShortcutUser,
+    setPendingShortcutUser,
+    addShortcut,
+    deleteShortcut,
   } = useCalculatorViewModel();
 
   // --- State for Immersive Fullscreen ---
@@ -186,10 +193,13 @@ export default function App() {
 
               {screen === 'messenger' && (
                 <SecretMessengerScreen
+                  settings={settings}
                   onLock={() => navigate('wiki_lock')}
                   onOpenSettings={() => navigate('settings')}
                   onOpenVault={() => navigate('vault')}
                   showToast={showToast}
+                  directTargetUser={pendingShortcutUser}
+                  clearDirectTargetUser={() => setPendingShortcutUser(null)}
                 />
               )}
 
@@ -215,6 +225,7 @@ export default function App() {
               {screen === 'settings' && (
                 <SettingsScreen
                   settings={settings}
+                  setSettings={setSettings}
                   currentPasswordVal={password}
                   changePassword={changePassword}
                   exportData={exportData}
@@ -224,6 +235,10 @@ export default function App() {
                   getStorageUsage={getStorageUsage}
                   onBack={() => navigate(prevScreen)}
                   showToast={showToast}
+                  isSecureEnclave={prevScreen === 'messenger' || prevScreen === 'vault'}
+                  shortcuts={shortcuts}
+                  addShortcut={addShortcut}
+                  deleteShortcut={deleteShortcut}
                 />
               )}
 

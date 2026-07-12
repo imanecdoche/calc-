@@ -119,6 +119,15 @@ export function useChatViewModel() {
     };
   }, []);
 
+  // Sync active username to localStorage for other hooks/screens (e.g. calculator numpad check)
+  useEffect(() => {
+    if (myUsername) {
+      localStorage.setItem('calcplus_active_username', myUsername);
+    } else {
+      localStorage.removeItem('calcplus_active_username');
+    }
+  }, [myUsername]);
+
   // 2. Subscribe to general Connection State
   useEffect(() => {
     const unsubscribe = connectionManager.subscribe((state) => {

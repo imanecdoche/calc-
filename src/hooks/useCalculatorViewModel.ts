@@ -5,7 +5,8 @@ import {
   VaultNote, 
   VaultPassword, 
   VaultDiary, 
-  AppSettings 
+  AppSettings,
+  SecretShortcut
 } from '../types';
 import { evaluateExpression } from '../utils/MathEngine';
 import { FullscreenManager } from '../services/FullscreenManager';
@@ -20,15 +21,18 @@ interface LocalStorageData {
   vaultPasswords: VaultPassword[];
   vaultDiaries: VaultDiary[];
   settings: AppSettings;
+  shortcuts?: SecretShortcut[];
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  version: '1.7.0',
+  version: '2.1.0',
   buildDate: '2026-07-12',
   environment: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   fullscreen: false,
   theme: 'dark',
   isDegree: false,
+  keyboardType: 'system',
+  keyboardHeight: 260,
 };
 
 const INITIAL_DATA: LocalStorageData = {
@@ -46,6 +50,7 @@ const INITIAL_DATA: LocalStorageData = {
   vaultPasswords: [],
   vaultDiaries: [],
   settings: DEFAULT_SETTINGS,
+  shortcuts: [],
 };
 
 export function useCalculatorViewModel() {
@@ -68,6 +73,10 @@ export function useCalculatorViewModel() {
   const [vaultPasswords, setVaultPasswords] = useState<VaultPassword[]>([]);
   const [vaultDiaries, setVaultDiaries] = useState<VaultDiary[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  
+  // --- Secret Shortcuts (Persisted) ---
+  const [shortcuts, setShortcuts] = useState<SecretShortcut[]>([]);
+  const [pendingShortcutUser, setPendingShortcutUser] = useState<string | null>(null);
 
   // --- UI Toast / Error Feedbacks (Transient) ---
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -106,8 +115,17 @@ export function useCalculatorViewModel() {
     setVaultNotes(data.vaultNotes || []);
     setVaultPasswords(data.vaultPasswords || []);
     setVaultDiaries(data.vaultDiaries || []);
-    setSettings(data.settings || DEFAULT_SETTINGS);
-    setIsDegree(data.settings?.isDegree ?? false);
+    
+    const loadedSettings = data.settings || DEFAULT_SETTINGS;
+    const migratedSettings: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      ...loadedSettings,
+      keyboardType: loadedSettings.keyboardType ?? 'system',
+      keyboardHeight: loadedSettings.keyboardHeight ?? 260,
+    };
+    setSettings(migratedSettings);
+    setIsDegree(migratedSettings.isDegree ?? false);
+    setShortcuts(data.shortcuts || []);
   };
 
   // --- Autosave Debounce Engine ---
@@ -126,12 +144,13 @@ export function useCalculatorViewModel() {
         vaultPasswords,
         vaultDiaries,
         settings: { ...settings, isDegree },
+        shortcuts,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     }, 500); // 500ms debounce autosave
 
     return () => clearTimeout(handler);
-  }, [password, vaultNotes, vaultPasswords, vaultDiaries, settings, isDegree]);
+  }, [password, vaultNotes, vaultPasswords, vaultDiaries, settings, isDegree, shortcuts]);
 
   // --- Helper to show toasts ---
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -202,9 +221,33 @@ export function useCalculatorViewModel() {
     if (!expression || expression.trim() === '') return;
 
     // --- SECRET TRIGGER CHECK ---
-    // If user inputs "1+2+3="
-    // Wait, the expression would be "1+2+3" when they hit "="
     const trimmedExpr = expression.replace(/\s+/g, '');
+
+    // Check custom shortcuts for the currently active logged-in user
+    const activeUsername = localStorage.getItem('calcplus_active_username') || '';
+    const matchingShortcut = shortcuts.find(s => s.combination === trimmedExpr && s.ownerUsername === activeUsername);
+    if (matchingShortcut) {
+      setResult('0');
+      FullscreenManager.getInstance().setSecretSessionActive(true);
+      
+      const newHistoryItem: HistoryItem = {
+        id: Math.random().toString(36).substr(2, 9),
+        expression: expression,
+        result: '0',
+        timestamp: Date.now()
+      };
+      setHistory(prev => [newHistoryItem, ...prev]);
+
+      setPendingShortcutUser(matchingShortcut.targetUsername);
+      
+      if (matchingShortcut.requiresAccessKey) {
+        setScreen('unlock');
+      } else {
+        setScreen('messenger');
+      }
+      return;
+    }
+
     if (trimmedExpr === '1+2+3') {
       setResult('0');
       setIsTriggered(true); // Flag to transition on next click
@@ -425,6 +468,20 @@ export function useCalculatorViewModel() {
     showToast('Temporary browser cache cleared successfully.', 'success');
   };
 
+  const addShortcut = (shortcut: Omit<SecretShortcut, 'id'>) => {
+    const newShortcut: SecretShortcut = {
+      ...shortcut,
+      id: Math.random().toString(36).substr(2, 9),
+    };
+    setShortcuts(prev => [...prev, newShortcut]);
+    showToast('Pintasan rahasia berhasil dibuat!', 'success');
+  };
+
+  const deleteShortcut = (id: string) => {
+    setShortcuts(prev => prev.filter(s => s.id !== id));
+    showToast('Pintasan rahasia berhasil dihapus.', 'info');
+  };
+
   // Storage usage calculation
   const getStorageUsage = () => {
     try {
@@ -487,5 +544,12 @@ export function useCalculatorViewModel() {
     resetAllData,
     clearCache,
     getStorageUsage,
+
+    // Shortcut state & operations
+    shortcuts,
+    pendingShortcutUser,
+    setPendingShortcutUser,
+    addShortcut,
+    deleteShortcut,
   };
 }
