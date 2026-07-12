@@ -201,6 +201,28 @@ export default function SettingsScreen({
 
   const changelogs: ChangelogEntry[] = [
     {
+      version: 'v1.9.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Menambahkan fitur Kunci Wikipedia Disguise (menyamarkan chat room menjadi halaman Wikipedia acak luring/daring)' },
+        { type: 'added', text: 'Menambahkan tombol menu hamburger rahasia di header Wikipedia untuk kembali ke halaman Kalkulator awal' },
+        { type: 'added', text: 'Menambahkan sensor guncangan (shake) otomatis yang mengalihkan tampilan obrolan ke Wikipedia secara instan saat diguncang' },
+        { type: 'added', text: 'Menambahkan deteksi kunci layar otomatis (visibilitychange/pagehide) untuk menyembunyikan obrolan saat ponsel mati/terkunci' },
+        { type: 'improved', text: 'Optimalisasi laci luring (mockup) artikel Wikipedia berbahasa Indonesia dengan fakta ensiklopedis nyata' }
+      ]
+    },
+    {
+      version: 'v1.8.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Menambahkan pelacakan kehadiran real-time (sistem heartbeat kehadiran pengguna)' },
+        { type: 'added', text: 'Menambahkan indikator status online di dalam header chat jika kontak membuka obrolan yang sama' },
+        { type: 'added', text: 'Menambahkan info status offline relatif (contoh: offline (3 min ago)) jika kontak tidak aktif' },
+        { type: 'improved', text: 'Penyempurnaan header obrolan lengket (sticky header) dengan indikator visual titik sinyal aktif (aktif/tidak aktif)' },
+        { type: 'improved', text: 'Integrasi status mengetik (typing...) langsung di bawah nama kontak di header obrolan' }
+      ]
+    },
+    {
       version: 'v1.7.0',
       date: '2026-07-12',
       changes: [

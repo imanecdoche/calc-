@@ -42,6 +42,10 @@ export function useChatViewModel() {
   const [rawMessages, setRawMessages] = useState<Message[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [targetIsTyping, setTargetIsTyping] = useState<boolean>(false);
+  const [targetPresence, setTargetPresence] = useState<{ isOnline: boolean; lastSeen: number | null }>({
+    isOnline: false,
+    lastSeen: null,
+  });
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const [connectingToUser, setConnectingToUser] = useState<boolean>(false);
 
@@ -499,6 +503,7 @@ export function useChatViewModel() {
     setReplyingTo(null);
     setErrorMsg(null);
     setTargetIsTyping(false);
+    setTargetPresence({ isOnline: false, lastSeen: null });
     connectionManager.setFirestoreConnected(false);
     paginationManager.reset();
   }, [paginationManager]);
@@ -572,6 +577,89 @@ export function useChatViewModel() {
     };
   }, [activeTargetUser, myUsername, paginationManager.getLimit()]);
 
+  // 14.5 Realtime Presence tracking (Heartbeat & Target User active viewing state)
+  useEffect(() => {
+    if (!activeTargetUser || !myUsername) {
+      setTargetPresence({ isOnline: false, lastSeen: null });
+      return;
+    }
+
+    const conversationId = conversationRepository.generateConversationId(myUsername, activeTargetUser.username);
+    const conversationRef = doc(db, 'conversations', conversationId);
+
+    // Immediate write: we are active and viewing
+    const writeOnline = async () => {
+      try {
+        await updateDoc(conversationRef, {
+          [`viewing.${myUsername}`]: true,
+          [`last_seen.${myUsername}`]: Date.now()
+        });
+      } catch (err) {
+        console.error('Error writing initial presence:', err);
+      }
+    };
+    writeOnline();
+
+    // Heartbeat every 4 seconds
+    const heartbeatTimer = setInterval(async () => {
+      try {
+        await updateDoc(conversationRef, {
+          [`last_seen.${myUsername}`]: Date.now()
+        });
+      } catch (err) {
+        console.error('Error updating heartbeat:', err);
+      }
+    }, 4000);
+
+    // Listen to the target user's presence fields in the conversation document
+    let targetViewing = false;
+    let targetLastSeen: number | null = null;
+
+    const evaluatePresence = () => {
+      // Considered online if viewing boolean is true AND their heartbeat is fresh (within 12 seconds)
+      const online = targetViewing && targetLastSeen && (Date.now() - targetLastSeen < 12000);
+      setTargetPresence({
+        isOnline: !!online,
+        lastSeen: targetLastSeen
+      });
+    };
+
+    const unsubscribePresence = onSnapshot(conversationRef, (snapshot) => {
+      if (!snapshot.exists()) return;
+      const data = snapshot.data();
+      const viewingMap = data.viewing || {};
+      const lastSeenMap = data.last_seen || {};
+
+      targetViewing = viewingMap[activeTargetUser.username] === true;
+      targetLastSeen = lastSeenMap[activeTargetUser.username] || null;
+
+      evaluatePresence();
+    }, (err) => {
+      console.error('Error listening to conversation presence:', err);
+    });
+
+    // Re-evaluate every 2 seconds to transition to offline if heartbeat expires
+    const evalTimer = setInterval(() => {
+      evaluatePresence();
+    }, 2000);
+
+    sessionCleaner.registerListener(unsubscribePresence);
+
+    return () => {
+      clearInterval(heartbeatTimer);
+      clearInterval(evalTimer);
+      unsubscribePresence();
+
+      // Set ourself offline immediately on clean leave/disconnect
+      updateDoc(conversationRef, {
+        [`viewing.${myUsername}`]: false,
+        [`last_seen.${myUsername}`]: Date.now()
+      }).catch((err) => {
+        console.error('Error writing exit presence:', err);
+      });
+    };
+  }, [activeTargetUser, myUsername]);
+
   // 15. Merge raw firestore messages, optimistic local sending arrays, and filter locally deleted messages
   const processedMessages = useMemo(() => {
     // Filter out messages that have been marked deleted locally
@@ -594,6 +682,7 @@ export function useChatViewModel() {
     messages: processedMessages,
     errorMsg,
     targetIsTyping,
+    targetPresence,
     connectionState,
     replyingTo,
     hasMoreHistory,

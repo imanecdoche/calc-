@@ -22,6 +22,7 @@ import SettingsScreen from './components/SettingsScreen';
 import SecretMessengerScreen from './components/SecretMessengerScreen';
 import DevUnlockScreen from './components/DevUnlockScreen';
 import DevToolsScreen from './components/DevToolsScreen';
+import WikiLockScreen from './components/WikiLockScreen';
 
 export default function App() {
   const {
@@ -185,7 +186,7 @@ export default function App() {
 
               {screen === 'messenger' && (
                 <SecretMessengerScreen
-                  onLock={() => navigate('calculator')}
+                  onLock={() => navigate('wiki_lock')}
                   onOpenSettings={() => navigate('settings')}
                   onOpenVault={() => navigate('vault')}
                   showToast={showToast}
@@ -204,7 +205,7 @@ export default function App() {
                   deletePassword={deletePassword}
                   addDiaryEntry={addDiaryEntry}
                   deleteDiaryEntry={deleteDiaryEntry}
-                  onLock={() => navigate('calculator')}
+                  onLock={() => navigate('wiki_lock')}
                   showToast={showToast}
                   onOpenSettings={() => navigate('settings')}
                   onOpenMessenger={() => navigate('messenger')}
@@ -238,6 +239,12 @@ export default function App() {
                 <DevToolsScreen
                   onBack={() => navigate('calculator')}
                   showToast={showToast}
+                />
+              )}
+
+              {screen === 'wiki_lock' && (
+                <WikiLockScreen
+                  onUnlockToCalculator={() => navigate('calculator')}
                 />
               )}
             </motion.div>

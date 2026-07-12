@@ -20,6 +20,7 @@ import { useChatViewModel } from '../hooks/ChatViewModel';
 import ChatScreen from './ChatScreen';
 import { useCallViewModel } from '../hooks/CallViewModel';
 import CallOverlay from './CallOverlay';
+import { useDisguiseTrigger } from '../hooks/useDisguiseTrigger';
 
 import { SecureWindowManager } from '../services/SecureWindowManager';
 import { SessionTimeoutManager } from '../services/SessionTimeoutManager';
@@ -40,6 +41,15 @@ export default function SecretMessengerScreen({
 }: SecretMessengerScreenProps) {
   const viewModel = useChatViewModel();
   const callViewModel = useCallViewModel(viewModel.myUsername);
+
+  // Auto-redirect to Wikipedia disguise on shake or screen lock / background transition
+  useDisguiseTrigger({
+    isActive: true,
+    onTrigger: () => {
+      viewModel.disconnect();
+      onLock();
+    }
+  });
   const [targetUsernameInput, setTargetUsernameInput] = useState('');
   const [myUsernameInput, setMyUsernameInput] = useState('');
   const [myPasswordInput, setMyPasswordInput] = useState('');
@@ -241,51 +251,53 @@ export default function SecretMessengerScreen({
     >
       
       {/* 1. Header (Sticky Top, Very Discreet) */}
-      <header className="min-h-14 h-auto pt-[env(safe-area-inset-top,0px)] pb-1.5 bg-[#0a0a0a] border-b border-neutral-900 flex items-center justify-between px-4 sticky top-0 z-30 flex-none">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2">
-            <span className="font-mono text-[10px] tracking-wider text-neutral-500 font-bold">SECURE_NODE</span>
+      {!viewModel.activeTargetUser && (
+        <header className="min-h-14 h-auto pt-[env(safe-area-inset-top,0px)] pb-1.5 bg-[#0a0a0a] border-b border-neutral-900 flex items-center justify-between px-4 sticky top-0 z-30 flex-none">
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 text-neutral-500">
+              <Lock size={12} className="stroke-[2.5]" />
+            </div>
+            {renderConnectionBadge()}
           </div>
-          {renderConnectionBadge()}
-        </div>
 
-        {/* Navigation Actions to other components */}
-        <div className="flex items-center space-x-1.5">
-          {/* Open Vault (Notes, Password, Diary) */}
-          <button
-            onClick={onOpenVault}
-            title="Open Vault"
-            aria-label="Open Vault"
-            className="p-2.5 rounded-xl hover:bg-neutral-900 border border-transparent hover:border-neutral-800 text-neutral-400 hover:text-neutral-200 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
-          >
-            <FolderLock size={15} />
-          </button>
-          
-          {/* Settings button */}
-          <button
-            onClick={onOpenSettings}
-            title="Open Settings"
-            aria-label="Open Settings"
-            className="p-2.5 rounded-xl hover:bg-neutral-900 border border-transparent hover:border-neutral-800 text-neutral-400 hover:text-neutral-200 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
-          >
-            <Settings size={15} />
-          </button>
+          {/* Navigation Actions to other components */}
+          <div className="flex items-center space-x-1.5">
+            {/* Open Vault (Notes, Password, Diary) */}
+            <button
+              onClick={onOpenVault}
+              title="Open Vault"
+              aria-label="Open Vault"
+              className="p-2.5 rounded-xl hover:bg-neutral-900 border border-transparent hover:border-neutral-800 text-neutral-400 hover:text-neutral-200 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+            >
+              <FolderLock size={15} />
+            </button>
+            
+            {/* Settings button */}
+            <button
+              onClick={onOpenSettings}
+              title="Open Settings"
+              aria-label="Open Settings"
+              className="p-2.5 rounded-xl hover:bg-neutral-900 border border-transparent hover:border-neutral-800 text-neutral-400 hover:text-neutral-200 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+            >
+              <Settings size={15} />
+            </button>
 
-          {/* Quick Lock back to calculator (Instant Lock, No dialog, clears all) */}
-          <button
-            onClick={() => {
-              viewModel.disconnect();
-              onLock();
-            }}
-            title="Lock Now"
-            aria-label="Lock Now"
-            className="px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-rose-400 hover:bg-rose-950/10 hover:border-rose-950 text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer min-h-[44px]"
-          >
-            <Lock size={11} />
-            <span>Lock</span>
-          </button>
-        </div>
-      </header>
+            {/* Quick Lock back to calculator (Instant Lock, No dialog, clears all) */}
+            <button
+              onClick={() => {
+                viewModel.disconnect();
+                onLock();
+              }}
+              title="Lock Now"
+              aria-label="Lock Now"
+              className="px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-rose-400 hover:bg-rose-950/10 hover:border-rose-950 text-xs font-medium transition-all flex items-center space-x-1.5 cursor-pointer min-h-[44px]"
+            >
+              <Lock size={11} />
+              <span>Lock</span>
+            </button>
+          </div>
+        </header>
+      )}
 
       {/* Offline Alert Banner */}
       <AnimatePresence>
@@ -632,6 +644,7 @@ export default function SecretMessengerScreen({
                     callViewModel.startCall(viewModel.activeTargetUser.username);
                   }
                 }}
+                onLock={onLock}
               />
             </motion.div>
           )}

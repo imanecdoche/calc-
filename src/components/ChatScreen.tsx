@@ -29,9 +29,10 @@ import { WaveformView } from './WaveformView';
 interface ChatScreenProps {
   viewModel: ChatViewModelType;
   onStartVoiceCall: () => void;
+  onLock: () => void;
 }
 
-export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenProps) {
+export default function ChatScreen({ viewModel, onStartVoiceCall, onLock }: ChatScreenProps) {
   const [text, setText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -260,6 +261,7 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
     activeTargetUser, 
     messages, 
     targetIsTyping, 
+    targetPresence,
     sendMessage, 
     reportTyping, 
     disconnect,
@@ -267,6 +269,43 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
     handleCancelReply,
     hasMoreHistory
   } = viewModel;
+
+  // Periodic tick to auto-update "offline (x minutes ago)" values
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getPresenceSubtext = () => {
+    if (targetIsTyping) {
+      return 'typing...';
+    }
+    if (targetPresence?.isOnline) {
+      return 'online';
+    }
+    if (!targetPresence?.lastSeen) {
+      return 'offline';
+    }
+    const diffMs = Date.now() - targetPresence.lastSeen;
+    if (diffMs < 60000) {
+      return 'offline (just now)';
+    }
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 60) {
+      return `offline (${diffMin} min ago)`;
+    }
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) {
+      return `offline (${diffHours} hours ago)`;
+    }
+    const diffDays = Math.floor(diffHours / 24);
+    return `offline (${diffDays} days ago)`;
+  };
+
+  const isTargetActive = targetIsTyping || (targetPresence?.isOnline ?? false);
 
   // Auto focus input on mount
   useEffect(() => {
@@ -373,7 +412,7 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
 
   return (
     <div 
-      className="absolute inset-0 bg-[#07080b] flex flex-col justify-between z-20"
+      className="absolute inset-0 bg-[#07080b] flex flex-col justify-between overflow-hidden z-20"
       style={viewportHeight ? { height: `${viewportHeight}px`, bottom: 'auto' } : {}}
     >
       
@@ -409,24 +448,26 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
                 </div>
               )}
               {/* Active Signal dot */}
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-neutral-950 animate-pulse" />
+              <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-neutral-950 ${
+                isTargetActive ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-600'
+              }`} />
             </div>
             
             <div className="flex flex-col justify-center">
               <span className="text-xs font-bold text-neutral-200 tracking-wide font-sans leading-tight">
                 {activeTargetUser.displayName}
               </span>
-              {/* Typing Indicator underneath Username */}
+              {/* Typing / Online / Offline Indicator underneath Username */}
               <div className="h-3.5 flex items-center mt-0.5">
-                {targetIsTyping ? (
-                  <span className="text-[10px] font-mono font-bold text-emerald-400 animate-pulse tracking-wide uppercase">
-                    typing...
-                  </span>
-                ) : (
-                  <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest leading-none">
-                    {activeTargetUser.role || 'TEMPORARY_CONTACT'}
-                  </span>
-                )}
+                <span className={`text-[9px] font-mono uppercase tracking-widest leading-none ${
+                  targetIsTyping 
+                    ? 'text-emerald-400 font-bold animate-pulse' 
+                    : targetPresence?.isOnline 
+                      ? 'text-emerald-500 font-semibold' 
+                      : 'text-neutral-500'
+                }`}>
+                  {getPresenceSubtext()}
+                </span>
               </div>
             </div>
           </div>
@@ -448,7 +489,7 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
           <button
             onClick={() => {
               disconnect();
-              window.location.reload();
+              onLock();
             }}
             title="Lock Now"
             aria-label="Lock Now"
