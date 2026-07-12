@@ -654,32 +654,16 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
               />
             </div>
 
-            {/* Microphone Button (Hold to Record) */}
-            {!text.trim() && (
-              <button
-                type="button"
-                onMouseDown={handleMicPressStart}
-                onTouchStart={handleMicPressStart}
-                className="bg-neutral-900 hover:bg-neutral-800 text-indigo-400 border border-neutral-800/85 p-2.5 rounded-xl transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-90 select-none"
-                title="Tahan untuk merekam pesan suara"
-                aria-label="Tahan untuk merekam"
-              >
-                <Mic size={15} />
-              </button>
-            )}
-
             {/* Standard Send button */}
-            {(text.trim() || text.length > 0) && (
-              <button
-                type="submit"
-                disabled={!text.trim()}
-                title="Send encrypted message"
-                aria-label="Send encrypted message"
-                className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-900/50 text-white disabled:text-neutral-700 p-2.5 rounded-xl border border-indigo-500/20 disabled:border-neutral-900/50 transition cursor-pointer disabled:cursor-not-allowed min-w-[44px] min-h-[44px] flex items-center justify-center"
-              >
-                <Send size={14} className="animate-pulse" />
-              </button>
-            )}
+            <button
+              type="submit"
+              disabled={!text.trim()}
+              title="Send encrypted message"
+              aria-label="Send encrypted message"
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-[#121212] text-white disabled:text-neutral-600 p-2.5 rounded-xl border border-indigo-500/20 disabled:border-neutral-850/40 transition cursor-pointer disabled:cursor-not-allowed min-w-[44px] min-h-[44px] flex items-center justify-center"
+            >
+              <Send size={14} />
+            </button>
           </form>
         )}
       </div>

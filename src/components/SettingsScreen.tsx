@@ -20,10 +20,14 @@ import {
   ChevronDown,
   ChevronUp,
   BookOpen,
-  HelpCircle
+  HelpCircle,
+  User as UserIcon,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { AppScreen, ChangelogEntry, AppSettings } from '../types';
 import { FullscreenManager } from '../services/FullscreenManager';
+import { useChatViewModel } from '../hooks/ChatViewModel';
 
 interface SettingsScreenProps {
   settings: AppSettings;
@@ -56,11 +60,13 @@ export default function SettingsScreen({
   const [confirmPasscode, setConfirmPasscode] = useState('');
 
   // Changelog expand state
-  const [changelogExpanded, setChangelogExpanded] = useState(false); // Let's default to false so User Guide stands out!
+  const [changelogExpanded, setChangelogExpanded] = useState(false);
 
-  // Guide expand state
-  const [guideExpanded, setGuideExpanded] = useState(true);
-  const [activeGuideSec, setActiveGuideSec] = useState<string | null>('buka');
+  // Chat Account password states
+  const chatViewModel = useChatViewModel();
+  const [chatPasswordInput, setChatPasswordInput] = useState('');
+  const [showChatPassword, setShowChatPassword] = useState(false);
+  const [isUpdatingChatPassword, setIsUpdatingChatPassword] = useState(false);
 
   // File picker upload drag state
   const [dragActive, setDragActive] = useState(false);
@@ -119,6 +125,26 @@ export default function SettingsScreen({
     }
   };
 
+  const handleUpdateChatPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPassword = chatPasswordInput.trim();
+    if (!cleanPassword || cleanPassword.length < 4) {
+      showToast('Sandi minimal harus 4 karakter.', 'error');
+      return;
+    }
+    
+    setIsUpdatingChatPassword(true);
+    const res = await chatViewModel.updateMyPassword(cleanPassword);
+    setIsUpdatingChatPassword(false);
+
+    if (res.success) {
+      showToast('Sandi akun chat berhasil diperbarui!', 'success');
+      setChatPasswordInput('');
+    } else {
+      showToast(res.error || 'Gagal memperbarui sandi.', 'error');
+    }
+  };
+
   // Drag and drop JSON handlers
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -170,6 +196,18 @@ export default function SettingsScreen({
   };
 
   const changelogs: ChangelogEntry[] = [
+    {
+      version: 'v1.6.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Menambahkan autentikasi Sandi Akun untuk registrasi, login silang perangkat, dan keamanan ganda' },
+        { type: 'added', text: 'Menambahkan panel Manajemen Keamanan Sandi untuk akun chat yang sudah ada' },
+        { type: 'improved', text: 'Validasi ketat username hanya mendukung karakter a-z dan 0-9 dengan pembersihan otomatis saat mengetik' },
+        { type: 'removed', text: 'Menghapus panduan pengguna interaktif dari menu pengaturan' },
+        { type: 'removed', text: 'Menghapus fitur rekam & kirim pesan suara (Voice Note) dari ruang chat' },
+        { type: 'removed', text: 'Menghapus petunjuk visual sandi kalkulator default (Default Key: 1234) demi privasi penuh' }
+      ]
+    },
     {
       version: 'v1.5.0',
       date: '2026-07-11',
@@ -253,8 +291,7 @@ export default function SettingsScreen({
 
       {/* Main Settings Body */}
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
-        
-        {/* ACCESS KEY MANAGEMENT */}
+               {/* ACCESS KEY MANAGEMENT */}
         <section className="bg-[#121212] border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-sm">
           <div className="flex items-center space-x-2.5 border-b border-neutral-900/60 pb-3">
             <KeyRound className="text-neutral-400" size={14} />
@@ -269,7 +306,7 @@ export default function SettingsScreen({
               </div>
               <button
                 onClick={() => setEditingPasscode(true)}
-                className="px-4 py-2 text-xs font-bold rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 hover:border-neutral-700 text-neutral-200 cursor-pointer min-h-[44px]"
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-neutral-900 border border-neutral-850 hover:bg-neutral-800 hover:border-neutral-700 text-neutral-200 cursor-pointer min-h-[44px]"
               >
                 Change Key
               </button>
@@ -325,6 +362,68 @@ export default function SettingsScreen({
                 </button>
               </div>
             </form>
+          )}
+        </section>
+
+        {/* IDENTITAS AKUN SECRET CHAT */}
+        <section className="bg-[#121212] border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-sm">
+          <div className="flex items-center space-x-2.5 border-b border-neutral-900/60 pb-3">
+            <UserIcon className="text-neutral-400" size={14} />
+            <h2 className="font-bold text-xs tracking-wider uppercase text-neutral-300">Akun Chat & Keamanan</h2>
+          </div>
+
+          {chatViewModel.myUsername ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-[#0a0a0a] border border-neutral-900/60">
+                <div>
+                  <span className="text-xs text-neutral-400 block font-mono">Username Anda</span>
+                  <span className="text-xs font-bold text-neutral-100 font-mono">@{chatViewModel.myUsername}</span>
+                </div>
+                <div className="px-2 py-0.5 rounded bg-neutral-950 text-[9px] text-neutral-500 font-mono border border-neutral-900">
+                  {chatViewModel.myUserHasPassword ? '🔒 Diproteksi Sandi' : '⚠️ Sandi Belum Diatur'}
+                </div>
+              </div>
+
+              <form onSubmit={handleUpdateChatPassword} className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-neutral-500 uppercase">
+                    {chatViewModel.myUserHasPassword ? 'Ubah Sandi Akun Chat' : 'Atur Sandi Akun Chat (min. 4 kar)'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showChatPassword ? 'text' : 'password'}
+                      placeholder="Masukkan sandi baru"
+                      value={chatPasswordInput}
+                      onChange={(e) => setChatPasswordInput(e.target.value)}
+                      className="w-full bg-[#0a0a0a] border border-neutral-850 rounded-xl px-4 py-2.5 text-xs text-neutral-100 font-mono outline-none focus:border-neutral-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowChatPassword(!showChatPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-400 min-w-[24px] flex items-center justify-center"
+                    >
+                      {showChatPassword ? <Eye size={12} /> : <EyeOff size={12} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isUpdatingChatPassword || chatPasswordInput.trim().length < 4}
+                  className="w-full py-2.5 rounded-xl bg-neutral-200 hover:bg-white text-neutral-950 disabled:bg-[#121212] disabled:text-neutral-600 text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer min-h-[44px]"
+                >
+                  {isUpdatingChatPassword ? <RefreshCw className="animate-spin" size={13} /> : null}
+                  <span>{chatViewModel.myUserHasPassword ? 'Simpan Sandi Baru' : 'Atur Sandi Sekarang'}</span>
+                </button>
+              </form>
+            </div>
+          ) : (
+            <div className="p-3 text-center bg-[#0a0a0a] rounded-xl border border-neutral-900/60">
+              <p className="text-xs text-neutral-500 leading-relaxed">
+                Anda belum mendaftarkan username chat.<br />
+                Silakan buka tab <span className="text-neutral-300 font-bold">Secret Messenger</span> untuk mendaftar.
+              </p>
+            </div>
           )}
         </section>
 
@@ -444,219 +543,6 @@ export default function SettingsScreen({
               </button>
             </div>
           </div>
-        </section>
-
-        {/* PANDUAN PENGGUNA (USER GUIDE) */}
-        <section className="bg-[#121212] border border-neutral-900 rounded-2xl p-5 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between border-b border-neutral-900/60 pb-3">
-            <div className="flex items-center space-x-2.5">
-              <BookOpen className="text-indigo-400" size={14} />
-              <h2 className="font-bold text-xs tracking-wider uppercase text-neutral-300">Panduan Pengguna</h2>
-            </div>
-            <button
-              onClick={() => setGuideExpanded(!guideExpanded)}
-              className="p-1.5 text-neutral-400 hover:text-neutral-100 min-w-[44px] min-h-[44px] flex items-center justify-center transition-all"
-              title="Toggle Panduan"
-            >
-              {guideExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-          </div>
-
-          <AnimatePresence initial={false}>
-            {guideExpanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="space-y-3 overflow-hidden"
-              >
-                {/* 1. Cara Membuka */}
-                <div className="border border-neutral-900 rounded-xl overflow-hidden bg-[#0a0a0a]">
-                  <button
-                    onClick={() => setActiveGuideSec(activeGuideSec === 'buka' ? null : 'buka')}
-                    className="w-full px-4 py-3 text-left flex items-center justify-between hover:bg-neutral-900/40 transition-all min-h-[44px]"
-                  >
-                    <span className="text-xs font-bold text-neutral-250 flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-md bg-indigo-950/40 text-indigo-400 border border-indigo-900/60 flex items-center justify-center text-[10px] font-mono font-bold">1</span>
-                      <span>Cara Membuka Secret Messenger</span>
-                    </span>
-                    {activeGuideSec === 'buka' ? <ChevronUp size={14} className="text-neutral-500" /> : <ChevronDown size={14} className="text-neutral-500" />}
-                  </button>
-
-                  <AnimatePresence>
-                    {activeGuideSec === 'buka' && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="px-4 pb-4 border-t border-neutral-900/50 pt-3 text-[11px] text-neutral-400 space-y-2 leading-relaxed"
-                      >
-                        <ol className="list-decimal list-inside space-y-1.5">
-                          <li>Buka aplikasi <span className="text-neutral-200 font-bold">Calc+</span>.</li>
-                          <li>Masukkan kombinasi tombol rahasia: <span className="font-mono bg-neutral-900 text-indigo-300 border border-neutral-800 px-1.5 py-0.5 rounded text-[10px] font-bold">1 + 2 + 3 =</span></li>
-                          <li>Layar kalkulator akan menampilkan angka <span className="font-mono text-neutral-200 font-bold">0</span>.</li>
-                          <li>Tekan angka apa saja pada kalkulator untuk memunculkan halaman <span className="text-neutral-250 font-bold">ACCESS KEY</span>.</li>
-                          <li>Masukkan Access Key rahasia Anda untuk masuk ke dalam <span className="text-neutral-250 font-bold">Secret Messenger</span>.</li>
-                        </ol>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* 2. Registrasi Username */}
-                <div className="border border-neutral-900 rounded-xl overflow-hidden bg-[#0a0a0a]">
-                  <button
-                    onClick={() => setActiveGuideSec(activeGuideSec === 'username' ? null : 'username')}
-                    className="w-full px-4 py-3 text-left flex items-center justify-between hover:bg-neutral-900/40 transition-all min-h-[44px]"
-                  >
-                    <span className="text-xs font-bold text-neutral-250 flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-md bg-indigo-950/40 text-indigo-400 border border-indigo-900/60 flex items-center justify-center text-[10px] font-mono font-bold">2</span>
-                      <span>Registrasi Username & Akses</span>
-                    </span>
-                    {activeGuideSec === 'username' ? <ChevronUp size={14} className="text-neutral-500" /> : <ChevronDown size={14} className="text-neutral-500" />}
-                  </button>
-
-                  <AnimatePresence>
-                    {activeGuideSec === 'username' && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="px-4 pb-4 border-t border-neutral-900/50 pt-3 text-[11px] text-neutral-400 space-y-2.5 leading-relaxed"
-                      >
-                        <p>Saat pertama kali masuk ke mode rahasia:</p>
-                        <ol className="list-decimal list-inside space-y-1.5">
-                          <li>Masuk ke halaman <span className="text-neutral-200 font-bold">Access Key</span> untuk membuat kunci akses awal.</li>
-                          <li>Masuk ke menu <span className="text-neutral-200 font-bold">My Username</span> di halaman masuk.</li>
-                          <li>Tentukan username unik Anda (misalnya: <span className="font-mono text-indigo-300 font-bold">@ismael</span>, <span className="font-mono text-indigo-300 font-bold">@alex01</span>).</li>
-                        </ol>
-                        <div className="p-2.5 rounded-lg bg-indigo-950/10 border border-indigo-950/30 text-[10px] text-neutral-450 mt-1">
-                          <span className="font-bold text-indigo-300 block mb-0.5">⚠️ KETENTUAN USERNAME:</span>
-                          Hanya boleh dibuat <span className="text-neutral-200 font-bold">sekali</span>, harus <span className="text-neutral-200 font-bold">unik</span>, dan tidak dapat diubah lagi setelah disimpan demi privasi server.
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* 3. Menambahkan Teman */}
-                <div className="border border-neutral-900 rounded-xl overflow-hidden bg-[#0a0a0a]">
-                  <button
-                    onClick={() => setActiveGuideSec(activeGuideSec === 'teman' ? null : 'teman')}
-                    className="w-full px-4 py-3 text-left flex items-center justify-between hover:bg-neutral-900/40 transition-all min-h-[44px]"
-                  >
-                    <span className="text-xs font-bold text-neutral-250 flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-md bg-indigo-950/40 text-indigo-400 border border-indigo-900/60 flex items-center justify-center text-[10px] font-mono font-bold">3</span>
-                      <span>Menambahkan Teman & Mulai Chat</span>
-                    </span>
-                    {activeGuideSec === 'teman' ? <ChevronUp size={14} className="text-neutral-500" /> : <ChevronDown size={14} className="text-neutral-500" />}
-                  </button>
-
-                  <AnimatePresence>
-                    {activeGuideSec === 'teman' && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="px-4 pb-4 border-t border-neutral-900/50 pt-3 text-[11px] text-neutral-400 space-y-2.5 leading-relaxed"
-                      >
-                        <p>Tidak ada sistem daftar kontak otomatis untuk mencegah pelacakan:</p>
-                        <ul className="list-disc list-inside space-y-1.5">
-                          <li>Minta username teman Anda secara langsung (contoh: <span className="font-mono text-indigo-300 font-bold">fernandez</span>).</li>
-                          <li>Masukkan username teman pada halaman utama <span className="text-neutral-200 font-bold">Secret Messenger</span>.</li>
-                          <li>Ketuk tombol <span className="font-bold text-neutral-100 bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded text-[10px]">CONNECT</span>.</li>
-                          <li>Jika username benar, ruang obrolan obrolan aman langsung terbuka.</li>
-                        </ul>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* 4. Fitur Komunikasi */}
-                <div className="border border-neutral-900 rounded-xl overflow-hidden bg-[#0a0a0a]">
-                  <button
-                    onClick={() => setActiveGuideSec(activeGuideSec === 'fitur' ? null : 'fitur')}
-                    className="w-full px-4 py-3 text-left flex items-center justify-between hover:bg-neutral-900/40 transition-all min-h-[44px]"
-                  >
-                    <span className="text-xs font-bold text-neutral-250 flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-md bg-indigo-950/40 text-indigo-400 border border-indigo-900/60 flex items-center justify-center text-[10px] font-mono font-bold">4</span>
-                      <span>Pesan, Voice Note & Voice Call</span>
-                    </span>
-                    {activeGuideSec === 'fitur' ? <ChevronUp size={14} className="text-neutral-500" /> : <ChevronDown size={14} className="text-neutral-500" />}
-                  </button>
-
-                  <AnimatePresence>
-                    {activeGuideSec === 'fitur' && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="px-4 pb-4 border-t border-neutral-900/50 pt-3 text-[11px] text-neutral-400 space-y-2.5 leading-relaxed"
-                      >
-                        <div className="space-y-2">
-                          <div>
-                            <span className="font-bold text-neutral-200 block">💬 Kirim Pesan:</span>
-                            Ketik pesan Anda dan tekan tombol <span className="text-indigo-400 font-medium">Send</span>. Pesan terkirim secara instan & aman.
-                          </div>
-                          <div>
-                            <span className="font-bold text-neutral-200 block">🎙️ Voice Note:</span>
-                            Tekan dan tahan tombol mikrofon di samping input teks, rekam suara, lalu lepaskan untuk mengirimkannya secara otomatis.
-                          </div>
-                          <div>
-                            <span className="font-bold text-neutral-200 block">📞 1-on-1 Voice Call (WebRTC):</span>
-                            Ketuk ikon <span className="text-indigo-400 font-medium">Telepon</span> di kanan atas ruang chat. Panggilan aman peer-to-peer akan dimulai seketika melalui signaling rahasia Firestore.
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {/* 5. Keamanan & Tips */}
-                <div className="border border-neutral-900 rounded-xl overflow-hidden bg-[#0a0a0a]">
-                  <button
-                    onClick={() => setActiveGuideSec(activeGuideSec === 'tips' ? null : 'tips')}
-                    className="w-full px-4 py-3 text-left flex items-center justify-between hover:bg-neutral-900/40 transition-all min-h-[44px]"
-                  >
-                    <span className="text-xs font-bold text-neutral-250 flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-md bg-indigo-950/40 text-indigo-400 border border-indigo-900/60 flex items-center justify-center text-[10px] font-mono font-bold">5</span>
-                      <span>Lock Cepat & Tips Keamanan</span>
-                    </span>
-                    {activeGuideSec === 'tips' ? <ChevronUp size={14} className="text-neutral-500" /> : <ChevronDown size={14} className="text-neutral-500" />}
-                  </button>
-
-                  <AnimatePresence>
-                    {activeGuideSec === 'tips' && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="px-4 pb-4 border-t border-neutral-900/50 pt-3 text-[11px] text-neutral-400 space-y-2.5 leading-relaxed"
-                      >
-                        <div className="space-y-2">
-                          <div>
-                            <span className="font-bold text-neutral-200 block">🔒 Tombol Lock Now:</span>
-                            Ketuk tombol gembok di kanan atas header chat. Sesi langsung ditutup, semua memori dihapus, dan aplikasi kembali menyamar sebagai kalkulator ilmiah biasa.
-                          </div>
-                          <div>
-                            <span className="font-bold text-rose-400 block">⚠️ Jika Lupa Access Key:</span>
-                            Tidak ada fitur "Forgot Password" karena data terenkripsi lokal dan kami tidak menyimpan sandi Anda di cloud demi privasi mutlak. Jika lupa, Anda harus melakukan <span className="text-rose-400 font-bold">Wipe Data</span> di menu data.
-                          </div>
-                        </div>
-                        <ul className="list-disc list-inside mt-2 space-y-1 text-neutral-500 text-[10px]">
-                          <li>Jangan pernah membagikan Access Key kepada siapa pun.</li>
-                          <li>Cukup bagikan username Anda untuk dihubungi teman.</li>
-                          <li>Gunakan tombol Lock Now sebelum meminjamkan HP ke orang lain.</li>
-                        </ul>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-              </motion.div>
-            )}
-          </AnimatePresence>
         </section>
 
         {/* SYSTEM INFORMATION & CHANGELOGS */}

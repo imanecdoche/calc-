@@ -34,6 +34,7 @@ const messageStatusManager = new MessageStatusManager();
 export function useChatViewModel() {
   const [authUid, setAuthUid] = useState<string | null>(null);
   const [myUsername, setMyUsername] = useState<string | null>(null);
+  const [myUserHasPassword, setMyUserHasPassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [activeTargetUser, setActiveTargetUser] = useState<User | null>(null);
   
@@ -71,13 +72,18 @@ export function useChatViewModel() {
         if (active) {
           if (profile) {
             setMyUsername(profile.username);
+            setMyUserHasPassword(!!(profile as any).password);
           } else {
             setMyUsername(null);
+            setMyUserHasPassword(false);
           }
         }
       } catch (err) {
         console.error('Error fetching profile for UID:', uid, err);
-        if (active) setMyUsername(null);
+        if (active) {
+          setMyUsername(null);
+          setMyUserHasPassword(false);
+        }
       }
       if (active) setIsLoading(false);
     };
@@ -161,29 +167,82 @@ export function useChatViewModel() {
   }, [activeTargetUser, myUsername]);
 
   // 4. Register user's own unique username
-  const registerMyUsername = useCallback(async (username: string): Promise<{ success: boolean; error?: string }> => {
+  const registerMyUsername = useCallback(async (username: string, passwordVal: string): Promise<{ success: boolean; error?: string }> => {
     if (!authUid) {
-      return { success: false, error: 'Network offline. Please try again.' };
+      return { success: false, error: 'Koneksi offline. Silakan coba lagi.' };
     }
     setErrorMsg(null);
-    const cleanUsername = username.trim().toLowerCase();
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!cleanUsername) {
-      return { success: false, error: 'Username cannot be empty.' };
+      return { success: false, error: 'Username tidak boleh kosong.' };
+    }
+    if (!passwordVal || passwordVal.trim().length < 4) {
+      return { success: false, error: 'Password minimal harus 4 karakter.' };
     }
 
     try {
-      const isRegistered = await userRepository.registerUsername(authUid, cleanUsername);
+      const isRegistered = await userRepository.registerUsername(authUid, cleanUsername, passwordVal.trim());
       if (isRegistered) {
         setMyUsername(cleanUsername);
+        setMyUserHasPassword(true);
         return { success: true };
       } else {
-        return { success: false, error: 'Username already exists.' };
+        return { success: false, error: 'Username sudah digunakan oleh orang lain. Silakan buat yang unik.' };
       }
     } catch (err) {
       console.error('Registration error:', err);
-      return { success: false, error: 'Username already exists.' };
+      return { success: false, error: 'Username sudah terdaftar.' };
     }
   }, [authUid]);
+
+  // Login to existing account
+  const loginToExistingAccount = useCallback(async (username: string, passwordVal: string): Promise<{ success: boolean; error?: string }> => {
+    if (!authUid) {
+      return { success: false, error: 'Koneksi offline. Silakan coba lagi.' };
+    }
+    setErrorMsg(null);
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cleanUsername || !passwordVal) {
+      return { success: false, error: 'Username dan sandi tidak boleh kosong.' };
+    }
+
+    try {
+      const res = await userRepository.loginToExistingAccount(authUid, cleanUsername, passwordVal);
+      if (res.success) {
+        setMyUsername(cleanUsername);
+        setMyUserHasPassword(true);
+        return { success: true };
+      } else {
+        return { success: false, error: res.error || 'Login gagal.' };
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      return { success: false, error: 'Gagal menghubungkan. Silakan coba lagi.' };
+    }
+  }, [authUid]);
+
+  // Update password for existing user
+  const updateMyPassword = useCallback(async (passwordVal: string): Promise<{ success: boolean; error?: string }> => {
+    if (!authUid || !myUsername) {
+      return { success: false, error: 'Sesi aktif tidak ditemukan.' };
+    }
+    if (!passwordVal || passwordVal.trim().length < 4) {
+      return { success: false, error: 'Password minimal 4 karakter.' };
+    }
+
+    try {
+      const isSuccess = await userRepository.updateUserPassword(authUid, passwordVal.trim());
+      if (isSuccess) {
+        setMyUserHasPassword(true);
+        return { success: true };
+      } else {
+        return { success: false, error: 'Gagal memperbarui password.' };
+      }
+    } catch (err) {
+      console.error('Update password error:', err);
+      return { success: false, error: 'Gagal memperbarui password.' };
+    }
+  }, [authUid, myUsername]);
 
   // 5. Connect to a target username with explicit Loading state
   const connectToUser = useCallback(async (targetUsername: string): Promise<boolean> => {
@@ -511,6 +570,7 @@ export function useChatViewModel() {
   return {
     authUid,
     myUsername,
+    myUserHasPassword,
     isLoading,
     connectingToUser,
     activeTargetUser,
@@ -521,6 +581,8 @@ export function useChatViewModel() {
     replyingTo,
     hasMoreHistory,
     registerMyUsername,
+    loginToExistingAccount,
+    updateMyPassword,
     connectToUser,
     sendMessage,
     handleRetryMessage,

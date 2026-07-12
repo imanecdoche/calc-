@@ -13,7 +13,8 @@ import {
   Shield,
   WifiOff,
   RefreshCw,
-  EyeOff
+  EyeOff,
+  Eye
 } from 'lucide-react';
 import { useChatViewModel } from '../hooks/ChatViewModel';
 import ChatScreen from './ChatScreen';
@@ -41,6 +42,15 @@ export default function SecretMessengerScreen({
   const callViewModel = useCallViewModel(viewModel.myUsername);
   const [targetUsernameInput, setTargetUsernameInput] = useState('');
   const [myUsernameInput, setMyUsernameInput] = useState('');
+  const [myPasswordInput, setMyPasswordInput] = useState('');
+  const [isLoginMode, setIsLoginMode] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // States for existing users adding password
+  const [newPasswordVal, setNewPasswordVal] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [showAddPasswordForm, setShowAddPasswordForm] = useState(false);
+
   const [shakeTrigger, setShakeTrigger] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,15 +86,29 @@ export default function SecretMessengerScreen({
     };
   }, [onLock, viewModel, showToast]);
 
-  // Handle register my own username
-  const handleRegisterMyUsername = async (e: React.FormEvent) => {
+  // Handle register or login based on active mode
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanUsername = myUsernameInput.trim().toLowerCase();
-    if (!cleanUsername) return;
+    const cleanUsername = myUsernameInput.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanPassword = myPasswordInput.trim();
 
-    // Validate character format (standard alphanumeric)
-    if (!/^[a-zA-Z0-9_]{3,15}$/.test(cleanUsername)) {
-      setRegisterError('3-15 alphanumeric characters only.');
+    if (!cleanUsername) {
+      setRegisterError('Username tidak boleh kosong.');
+      setShakeTrigger(true);
+      setTimeout(() => setShakeTrigger(false), 500);
+      return;
+    }
+
+    // Validate character format (standard lowercase alphanumeric)
+    if (!/^[a-z0-9]{3,15}$/.test(cleanUsername)) {
+      setRegisterError('Username harus 3-15 karakter huruf kecil (a-z) dan angka (0-9).');
+      setShakeTrigger(true);
+      setTimeout(() => setShakeTrigger(false), 500);
+      return;
+    }
+
+    if (!cleanPassword || cleanPassword.length < 4) {
+      setRegisterError('Sandi minimal 4 karakter.');
       setShakeTrigger(true);
       setTimeout(() => setShakeTrigger(false), 500);
       return;
@@ -93,17 +117,56 @@ export default function SecretMessengerScreen({
     setRegisterError(null);
     setIsSubmitting(true);
     
-    const res = await viewModel.registerMyUsername(cleanUsername);
-    setIsSubmitting(false);
+    if (isLoginMode) {
+      // Login to existing account
+      const res = await viewModel.loginToExistingAccount(cleanUsername, cleanPassword);
+      setIsSubmitting(false);
+      if (res.success) {
+        showToast(`Berhasil masuk sebagai @${cleanUsername}!`, 'success');
+        setMyUsernameInput('');
+        setMyPasswordInput('');
+      } else {
+        setRegisterError(res.error || 'Login gagal.');
+        setShakeTrigger(true);
+        setTimeout(() => setShakeTrigger(false), 500);
+        showToast(res.error || 'Login gagal.', 'error');
+      }
+    } else {
+      // Register new account with password
+      const res = await viewModel.registerMyUsername(cleanUsername, cleanPassword);
+      setIsSubmitting(false);
+      if (res.success) {
+        showToast(`Username @${cleanUsername} berhasil didaftarkan!`, 'success');
+        setMyUsernameInput('');
+        setMyPasswordInput('');
+      } else {
+        setRegisterError(res.error || 'Username sudah terpakai.');
+        setShakeTrigger(true);
+        setTimeout(() => setShakeTrigger(false), 500);
+        showToast(res.error || 'Pendaftaran gagal.', 'error');
+      }
+    }
+  };
+
+  // Handle adding password for existing user
+  const handleAddPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPassword = newPasswordVal.trim();
+    if (!cleanPassword || cleanPassword.length < 4) {
+      showToast('Sandi minimal harus 4 karakter.', 'error');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    const res = await viewModel.updateMyPassword(cleanPassword);
+    setIsUpdatingPassword(false);
 
     if (res.success) {
-      showToast(`Username @${cleanUsername} successfully registered!`, 'success');
-      setMyUsernameInput('');
+      showToast('Sandi berhasil ditambahkan! Anda sekarang bisa login di perangkat lain.', 'success');
+      setNewPasswordVal('');
+      setShowAddPasswordForm(false);
     } else {
-      setRegisterError(res.error || 'Username already exists.');
-      setShakeTrigger(true);
-      setTimeout(() => setShakeTrigger(false), 500);
-      showToast(res.error || 'Username already exists.', 'error');
+      showToast(res.error || 'Gagal menambahkan sandi.', 'error');
     }
   };
 
@@ -243,7 +306,7 @@ export default function SecretMessengerScreen({
               </div>
             </motion.div>
           ) : !viewModel.myUsername ? (
-            // REGISTER USERNAME SCREEN
+            // REGISTER / LOGIN SCREEN
             <motion.div
               key="register-screen"
               initial={{ opacity: 0, y: 10 }}
@@ -259,17 +322,19 @@ export default function SecretMessengerScreen({
                 </div>
 
                 <h1 className="font-bold text-sm tracking-tight text-neutral-150 text-center mb-1">
-                  Choose Username
+                  {isLoginMode ? 'Login ke Akun' : 'Daftar Akun Baru'}
                 </h1>
-                <p className="text-[11px] text-neutral-500 text-center mb-8 max-w-[240px]">
-                  Establish your unique network identity. This is permanent.
+                <p className="text-[11px] text-neutral-500 text-center mb-6 max-w-[240px]">
+                  {isLoginMode 
+                    ? 'Masuk ke identitas terdaftar Anda agar terhubung lintas perangkat.' 
+                    : 'Pilih nama pengguna dan kata sandi unik untuk identitas terenkripsi Anda.'}
                 </p>
 
-                {/* Form Register */}
-                <form onSubmit={handleRegisterMyUsername} className="w-full space-y-4">
-                  <div className="space-y-1.5">
-                    <label htmlFor="my-username" className="block text-[10px] font-mono tracking-wider text-neutral-500 uppercase">
-                      My Username
+                {/* Form Auth */}
+                <form onSubmit={handleAuthSubmit} className="w-full space-y-3.5">
+                  <div className="space-y-1">
+                    <label htmlFor="my-username" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">
+                      Username
                     </label>
                     <motion.div
                       animate={shakeTrigger ? { x: [-6, 6, -6, 6, 0] } : {}}
@@ -279,21 +344,54 @@ export default function SecretMessengerScreen({
                       <input
                         id="my-username"
                         type="text"
-                        placeholder="e.g. alex01, ismael"
+                        placeholder="Contoh: alex01, ismael"
                         value={myUsernameInput}
                         onChange={(e) => {
-                          setMyUsernameInput(e.target.value);
+                          const sanitizedValue = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                          setMyUsernameInput(sanitizedValue);
                           setRegisterError(null);
                         }}
                         autoFocus
                         disabled={isSubmitting}
-                        className={`w-full px-4 py-3 bg-[#121212] border ${
+                        className={`w-full px-4 py-2.5 bg-[#121212] border ${
                           registerError 
                             ? 'border-rose-950/80 focus:border-rose-800 text-rose-300' 
                             : 'border-neutral-900 focus:border-neutral-800 text-neutral-200'
                         } rounded-xl text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
                       />
                     </motion.div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label htmlFor="my-password" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">
+                      Sandi (Password)
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="my-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder={isLoginMode ? "Masukkan kata sandi" : "Sandi minimal 4 karakter"}
+                        value={myPasswordInput}
+                        onChange={(e) => {
+                          setMyPasswordInput(e.target.value);
+                          setRegisterError(null);
+                        }}
+                        disabled={isSubmitting}
+                        className={`w-full px-4 py-2.5 bg-[#121212] border ${
+                          registerError 
+                            ? 'border-rose-950/80 focus:border-rose-800 text-rose-300' 
+                            : 'border-neutral-900 focus:border-neutral-800 text-neutral-200'
+                        } rounded-xl text-xs placeholder-neutral-700 focus:outline-none transition-all duration-150 text-center font-mono`}
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-400 min-w-[24px] flex items-center justify-center"
+                      >
+                        {showPassword ? <Eye size={12} /> : <EyeOff size={12} />}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Register Error text */}
@@ -303,9 +401,9 @@ export default function SecretMessengerScreen({
                         initial={{ opacity: 0, y: -4 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
-                        className="flex items-center justify-center space-x-1.5 text-rose-500 text-xs font-medium py-1"
+                        className="flex items-center justify-center space-x-1.5 text-rose-500 text-[11px] font-medium py-0.5"
                       >
-                        <AlertCircle size={13} />
+                        <AlertCircle size={12} />
                         <span>{registerError}</span>
                       </motion.div>
                     )}
@@ -313,19 +411,34 @@ export default function SecretMessengerScreen({
 
                   <button
                     type="submit"
-                    disabled={!myUsernameInput.trim() || isSubmitting}
+                    disabled={!myUsernameInput.trim() || !myPasswordInput.trim() || isSubmitting}
                     className="w-full py-3 px-4 rounded-xl bg-neutral-200 hover:bg-white text-neutral-950 disabled:bg-[#121212] disabled:text-neutral-600 border border-transparent disabled:border-neutral-850/40 font-bold text-xs tracking-wider uppercase transition-all duration-200 flex items-center justify-center space-x-2 active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? (
                       <Loader2 size={13} className="animate-spin text-neutral-500" />
                     ) : (
                       <>
-                        <span>Register Username</span>
+                        <span>{isLoginMode ? 'Login ke Akun' : 'Daftar Username'}</span>
                         <ArrowRight size={12} className="text-neutral-600" />
                       </>
                     )}
                   </button>
                 </form>
+
+                {/* Toggle Register / Login button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLoginMode(!isLoginMode);
+                    setRegisterError(null);
+                    setMyUsernameInput('');
+                    setMyPasswordInput('');
+                  }}
+                  className="mt-6 text-xs text-neutral-400 hover:text-neutral-200 underline cursor-pointer font-medium tracking-wide"
+                >
+                  {isLoginMode ? 'Belum punya akun? Buat akun di sini' : 'Sudah punya akun? Login ke akun yg sudah ada'}
+                </button>
+
               </div>
             </motion.div>
           ) : !viewModel.activeTargetUser ? (
@@ -350,9 +463,63 @@ export default function SecretMessengerScreen({
                 </h1>
 
                 {/* My Username Display Menu */}
-                <div className="flex items-center space-x-1.5 bg-[#121212] border border-neutral-900 px-3 py-1 rounded-md text-[10px] font-mono text-neutral-400 mb-8">
-                  <UserIcon size={11} />
-                  <span>Your profile: <strong className="text-neutral-200 font-bold">@{viewModel.myUsername}</strong></span>
+                <div className="flex flex-col items-center space-y-2 mb-8 w-full max-w-xs">
+                  <div className="flex items-center space-x-1.5 bg-[#121212] border border-neutral-900 px-3 py-1.5 rounded-md text-[10px] font-mono text-neutral-400">
+                    <UserIcon size={11} />
+                    <span>Your profile: <strong className="text-neutral-200 font-bold">@{viewModel.myUsername}</strong></span>
+                  </div>
+
+                  {/* Warn if no password, allowing existing users to add password */}
+                  {!viewModel.myUserHasPassword && (
+                    <div className="w-full bg-amber-950/20 border border-amber-900/30 p-3 rounded-xl text-left">
+                      {!showAddPasswordForm ? (
+                        <div>
+                          <p className="text-[10px] text-amber-300 leading-relaxed font-sans mb-2">
+                            ⚠️ Akun belum dilindungi sandi. Tambahkan sandi agar Anda dapat login lintas perangkat.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddPasswordForm(true)}
+                            className="text-[10px] font-bold text-amber-200 underline hover:text-amber-100 uppercase tracking-wider"
+                          >
+                            Atur Sandi Sekarang
+                          </button>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleAddPassword} className="space-y-2 w-full">
+                          <label className="block text-[9px] font-mono tracking-wider text-amber-300 uppercase">
+                            Buat Sandi Baru (min. 4 kar)
+                          </label>
+                          <div className="flex space-x-2">
+                            <input
+                              type="password"
+                              placeholder="Sandi baru"
+                              value={newPasswordVal}
+                              onChange={(e) => setNewPasswordVal(e.target.value)}
+                              className="flex-1 px-3 py-1.5 bg-[#0a0a0a] border border-amber-900 focus:border-amber-700 text-amber-200 rounded-lg text-xs font-mono focus:outline-none"
+                            />
+                            <button
+                              type="submit"
+                              disabled={isUpdatingPassword || newPasswordVal.trim().length < 4}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-neutral-900 disabled:text-neutral-700 text-neutral-950 rounded-lg text-[10px] font-bold uppercase tracking-wider transition cursor-pointer"
+                            >
+                              {isUpdatingPassword ? '...' : 'Simpan'}
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAddPasswordForm(false);
+                              setNewPasswordVal('');
+                            }}
+                            className="text-[9px] font-bold text-neutral-500 hover:text-neutral-400"
+                          >
+                            Batal
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Form Connect */}
@@ -369,10 +536,11 @@ export default function SecretMessengerScreen({
                       <input
                         id="target-username"
                         type="text"
-                        placeholder="e.g. ismael, fernandez, alex01"
+                        placeholder="Contoh: ismael, fernandez, alex01"
                         value={targetUsernameInput}
                         onChange={(e) => {
-                          setTargetUsernameInput(e.target.value);
+                          const sanitizedValue = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                          setTargetUsernameInput(sanitizedValue);
                           viewModel.clearError();
                         }}
                         autoFocus

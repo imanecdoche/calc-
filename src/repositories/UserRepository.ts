@@ -25,7 +25,8 @@ export class UserRepository {
       username: docData.username,
       displayName: docData.username.charAt(0).toUpperCase() + docData.username.slice(1),
       role: 'TEMPORARY_CONTACT',
-      uid: docData.uid // we can expose uid as well
+      uid: docData.uid,
+      password: docData.password || ''
     } as any;
   }
 
@@ -43,7 +44,8 @@ export class UserRepository {
         username: data.username,
         displayName: data.username.charAt(0).toUpperCase() + data.username.slice(1),
         role: 'OPERATOR',
-        uid: data.uid
+        uid: data.uid,
+        password: data.password || ''
       } as any;
     }
     return null;
@@ -53,23 +55,70 @@ export class UserRepository {
    * Create / register a unique username for a given UID.
    * Returns true if successful, false if already exists.
    */
-  public async registerUsername(uid: string, username: string): Promise<boolean> {
+  public async registerUsername(uid: string, username: string, passwordVal: string): Promise<boolean> {
     const normalized = username.trim().toLowerCase();
     
-    // 1. Check if username is already taken by anyone (including self, though we check overall first)
+    // 1. Check if username is already taken by anyone
     const existingUser = await this.getUserByUsername(normalized);
     if (existingUser) {
       return false; // Already taken
     }
     
-    // 2. Set the user document under their UID
+    // 2. Set the user document under their UID with password
     const userDocRef = doc(db, 'users', uid);
     await setDoc(userDocRef, {
       uid,
       username: normalized,
+      password: passwordVal,
       createdAt: Date.now()
     });
     
     return true;
+  }
+
+  /**
+   * Update password for an existing logged-in user.
+   */
+  public async updateUserPassword(uid: string, passwordVal: string): Promise<boolean> {
+    if (!uid) return false;
+    const userDocRef = doc(db, 'users', uid);
+    await setDoc(userDocRef, {
+      password: passwordVal
+    }, { merge: true });
+    return true;
+  }
+
+  /**
+   * Login to an existing account on a new device.
+   * Maps the username and password to the new device's UID.
+   */
+  public async loginToExistingAccount(newUid: string, username: string, passwordVal: string): Promise<{ success: boolean; error?: string }> {
+    const normalized = username.trim().toLowerCase();
+    
+    // 1. Fetch the existing user profile
+    const existingUser = await this.getUserByUsername(normalized);
+    if (!existingUser) {
+      return { success: false, error: 'Username tidak ditemukan.' };
+    }
+
+    const correctPassword = (existingUser as any).password;
+    if (!correctPassword) {
+      return { success: false, error: 'Akun ini belum memiliki password. Silakan atur password di perangkat asal terlebih dahulu.' };
+    }
+
+    if (correctPassword !== passwordVal) {
+      return { success: false, error: 'Password salah.' };
+    }
+
+    // 2. Link this username to the current device's UID by writing a new profile document under newUid
+    const userDocRef = doc(db, 'users', newUid);
+    await setDoc(userDocRef, {
+      uid: newUid,
+      username: normalized,
+      password: passwordVal,
+      createdAt: Date.now()
+    });
+
+    return { success: true };
   }
 }
