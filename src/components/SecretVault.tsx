@@ -206,8 +206,8 @@ export default function SecretVault({
             <button
               onClick={onOpenMessenger}
               className="p-2.5 rounded-xl hover:bg-neutral-900 border border-transparent hover:border-neutral-800 text-neutral-400 hover:text-neutral-200 cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center transition-all"
-              aria-label="Secret Messenger"
-              title="Secret Messenger"
+              aria-label="Secure Chat"
+              title="Secure Chat"
             >
               <MessageSquare size={16} />
             </button>

@@ -39,6 +39,8 @@ interface ChatScreenProps {
 export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLock }: ChatScreenProps) {
   const [text, setText] = useState('');
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+  const [isFooterActive, setIsFooterActive] = useState(false);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -365,11 +367,39 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
   const isTargetActive = targetIsTyping || (targetPresence?.isOnline ?? false);
 
+  const formattedStatus = useMemo(() => {
+    const raw = getPresenceSubtext().toLowerCase();
+    if (raw.includes('online')) return 'online';
+    if (raw.includes('typing')) return 'typing...';
+    // If "offline (3 min ago)" -> convert to "on 3 m ago"
+    // If "offline (just now)" -> convert to "on 0 m ago"
+    const minMatch = raw.match(/(\d+)\s*min/);
+    if (minMatch) return `on ${minMatch[1]} m ago`;
+    const hrMatch = raw.match(/(\d+)\s*hours/);
+    if (hrMatch) return `on ${hrMatch[1]} h ago`;
+    const dayMatch = raw.match(/(\d+)\s*days/);
+    if (dayMatch) return `on ${dayMatch[1]} d ago`;
+    if (raw.includes('just now')) return 'on 0 m ago';
+    return raw;
+  }, [getPresenceSubtext]);
+
   // Auto focus input on mount
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
+  }, []);
+
+  // Track active audio voice note playback
+  useEffect(() => {
+    const unsubscribe = AudioPlayerManager.getInstance().subscribe((msgId, state) => {
+      if (state.isPlaying) {
+        setPlayingVoiceId(msgId);
+      } else {
+        setPlayingVoiceId((prev) => (prev === msgId ? null : prev));
+      }
+    });
+    return unsubscribe;
   }, []);
 
   // Quick notification routine
@@ -466,164 +496,176 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     showSnackbar('This message was deleted.', 'success');
   };
 
+  const formatTerminalTime = (ts: number) => {
+    const d = new Date(ts);
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    const s = d.getSeconds().toString().padStart(2, '0');
+    return `${h}:${m}.${s}`;
+  };
+
+  const getTerminalStatus = (status?: string) => {
+    if (status === 'sending') return '[attempting]';
+    if (status === 'delivered') return '[approved]';
+    if (status === 'failed') return '[access denied]';
+    return '[deployed]';
+  };
+
   if (!activeTargetUser) return null;
 
   return (
     <div 
-      className="absolute inset-0 bg-[#07080b] flex flex-col justify-between overflow-hidden z-20"
+      className="absolute inset-0 bg-[#050505] flex flex-col justify-between overflow-hidden z-20 font-mono text-[#22c55e]"
       style={viewportHeight ? { height: `${viewportHeight}px`, bottom: 'auto' } : {}}
     >
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes terminal-blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        .cursor-blink {
+          animation: terminal-blink 1.2s step-end infinite;
+        }
+        .terminal-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .terminal-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .terminal-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(34, 197, 94, 0.2);
+          border-radius: 2px;
+        }
+      ` }} />
       
-      {/* 1. CHAT ROOM HEADER */}
-      <div className="min-h-14 h-auto pt-[env(safe-area-inset-top,0px)] pb-1.5 bg-neutral-950/90 border-b border-neutral-900/60 flex items-center justify-between px-3.5 backdrop-blur-md flex-none z-10">
-        
-        <div className="flex items-center space-x-2.5">
-          {/* Back to Connect screen (which clears session history) */}
-          <button
-            onClick={() => {
-              disconnect();
-            }}
-            title="Disconnect session"
-            aria-label="Disconnect session"
-            className="p-2 rounded-lg hover:bg-neutral-900 text-neutral-400 hover:text-neutral-200 transition cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
-          >
-            <ArrowLeft size={16} />
-          </button>
-
-          {/* Target User Details */}
-          <div className="flex items-center space-x-2">
-            <div className="relative">
-              {activeTargetUser.avatarUrl ? (
-                <img 
-                  src={activeTargetUser.avatarUrl} 
-                  alt={activeTargetUser.displayName} 
-                  referrerPolicy="no-referrer"
-                  className="w-9 h-9 rounded-full object-cover border border-indigo-900/40"
-                />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-indigo-400">
-                  <UserIcon size={14} />
-                </div>
-              )}
-              {/* Active Signal dot */}
-              <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-neutral-950 ${
-                isTargetActive ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-600'
-              }`} />
-            </div>
-            
-            <div className="flex flex-col justify-center">
-              <span className="text-xs font-bold text-neutral-200 tracking-wide font-sans leading-tight">
-                {activeTargetUser.displayName}
-              </span>
-              {/* Typing / Online / Offline Indicator underneath Username */}
-              <div className="h-3.5 flex items-center mt-0.5">
-                <span className={`text-[9px] font-mono uppercase tracking-widest leading-none ${
-                  targetIsTyping 
-                    ? 'text-emerald-400 font-bold animate-pulse' 
-                    : targetPresence?.isOnline 
-                      ? 'text-emerald-500 font-semibold' 
-                      : 'text-neutral-500'
-                }`}>
-                  {getPresenceSubtext()}
-                </span>
-              </div>
-            </div>
-          </div>
+      {/* 1. TERMINAL HEADER */}
+      <div className="flex flex-wrap items-center justify-between px-4 py-3 bg-[#020202] border-b border-green-950 text-xs font-mono text-[#22c55e] flex-none select-none">
+        <div className="flex items-center space-x-1">
+          <span>&gt; entity: {activeTargetUser.displayName} [status: {formattedStatus}]</span>
         </div>
-
-        {/* Header Action Row */}
-        <div className="flex items-center space-x-2">
-          {/* Voice Call Button */}
-          <button
-            onClick={onStartVoiceCall}
-            title="Start voice call"
-            aria-label="Start voice call"
-            className="p-2 rounded-lg hover:bg-neutral-900 border border-transparent hover:border-neutral-800 text-neutral-400 hover:text-indigo-400 transition cursor-pointer min-w-[40px] min-h-[40px] flex items-center justify-center"
+        <div className="flex items-center space-x-3 text-xs">
+          <button 
+            onClick={() => disconnect()}
+            className="hover:text-green-300 font-bold hover:underline cursor-pointer transition py-1"
           >
-            <Phone size={15} />
+            [back]
           </button>
-
-          {/* Quick Lock Button - Lock Now instantly clears session & exits */}
-          <button
+          <button 
             onClick={() => {
               disconnect();
               onLock();
             }}
-            title="Lock Now"
-            aria-label="Lock Now"
-            className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-rose-950/45 hover:bg-rose-900/60 border border-rose-900/50 hover:border-rose-800/80 text-rose-300 hover:text-rose-200 transition cursor-pointer text-[10px] font-mono font-bold uppercase"
+            className="hover:text-red-400 font-bold hover:underline cursor-pointer transition text-red-500 py-1"
           >
-            <Lock size={12} />
-            <span>Lock Now</span>
+            [lock]
           </button>
-
-          {/* Status Encrypted Indicator */}
-          <div className="hidden sm:flex items-center space-x-1.5 bg-indigo-950/30 border border-indigo-900/30 px-2.5 py-1.5 rounded-lg text-[9px] font-mono font-bold text-indigo-400">
-            <ShieldCheck size={12} />
-            <span>E2EE ACTIVE</span>
-          </div>
         </div>
+      </div>
+
+      {/* DASHES SEPARATOR BAR */}
+      <div className="text-green-950 px-4 pt-1 text-xs select-none tracking-widest flex-none leading-none">
+        ----------------------------------------------------------------------------------------------------
       </div>
 
       {/* 2. CHAT MESSAGES PANEL */}
       <div 
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-4 scrollbar-thin scrollbar-thumb-neutral-900 scrollbar-track-transparent bg-[#040508] relative"
+        className="flex-1 overflow-y-auto px-4 py-3 terminal-scrollbar relative"
         style={{ overflowX: 'hidden' }}
       >
         
-        {/* Warning Badge at Top of session */}
-        <div className="flex justify-center select-none pb-2">
-          <div className="px-3.5 py-1.5 rounded-xl bg-neutral-950 border border-neutral-900/60 text-center max-w-xs space-y-1">
-            <span className="block text-[9px] font-mono text-amber-500/80 font-bold tracking-wider">
-              ⚠️ SESSION PURGE ACTIVE
-            </span>
-            <span className="block text-[9px] text-neutral-600 font-sans leading-tight">
-              Leaving this chat erases all logs from memory. No database logs are retained permanently.
-            </span>
-          </div>
-        </div>
-
         {/* Pagination Trigger / Load More Header */}
         {hasMoreHistory && (
-          <div className="flex justify-center py-2">
-            <span className="text-[9px] font-mono text-neutral-500 bg-neutral-950 border border-neutral-900/50 px-2.5 py-1 rounded-full uppercase tracking-wider animate-pulse">
-              Scroll up to load previous messages
-            </span>
+          <div className="flex justify-start py-1 text-[10px] text-green-700/60 select-none">
+            [scroll up to load older transaction packets]
           </div>
         )}
 
         {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-neutral-600">
-            <p className="text-xs font-mono tracking-wider mb-1 uppercase">Channel established.</p>
-            <p className="text-[11px] leading-relaxed max-w-xs">Send an encrypted message to begin communication with {activeTargetUser.displayName}.</p>
+          <div className="py-6 text-green-700/80 text-xs text-left">
+            &gt; channel established. awaiting terminal instructions...
           </div>
         )}
 
-        {/* List render with bubbles and Date Separators */}
-        <div>
+        {/* List render with simple terminal lines */}
+        <div className="space-y-2">
           {messages.map((msg, index) => {
-            const showDate = shouldShowDateSeparator(
-              messages[index - 1]?.timestamp,
-              msg.timestamp
-            );
+            const isMe = msg.senderId === viewModel.myUsername;
+            const timeStr = formatTerminalTime(msg.timestamp);
+            const displayPrefix = isMe ? '+' : '-';
+            const statusStr = isMe ? `${getTerminalStatus(msg.status)} ` : '';
+            const isVoice = !!msg.audioUrl;
 
             return (
-              <React.Fragment key={msg.id || `msg-${index}`}>
-                {showDate && <DateSeparator timestamp={msg.timestamp} />}
-                <MessageBubble
-                  message={msg}
-                  myUsername={viewModel.myUsername || ''}
-                  onLongPress={handleLongPress}
-                  onRetry={viewModel.handleRetryMessage}
-                />
-              </React.Fragment>
+              <div 
+                key={msg.id || `msg-${index}`} 
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  handleLongPress(e, msg);
+                }}
+                className="text-xs font-mono text-[#22c55e] hover:bg-green-950/10 px-1 py-0.5 rounded transition select-text text-left leading-relaxed break-all flex flex-wrap items-center gap-x-2"
+              >
+                <span className="text-green-400 font-bold">{displayPrefix}</span>
+                
+                {/* Reply display if present */}
+                {msg.replyToId && !msg.deletedForEveryone && (
+                  <span className="text-green-700 text-[10px] select-none">
+                    [reply: @{msg.replyToSender}]
+                  </span>
+                )}
+
+                {msg.deletedForEveryone ? (
+                  <span className="text-red-900 italic">[message packet purged]</span>
+                ) : isVoice ? (
+                  <span className="text-green-400/80">
+                    [voice note: {msg.audioDuration || 0}s]
+                    <button
+                      onClick={() => {
+                        const player = AudioPlayerManager.getInstance();
+                        if (msg.id === playingVoiceId) {
+                          player.pause();
+                        } else {
+                          player.play(msg.id, msg.audioUrl || '');
+                        }
+                      }}
+                      className="ml-2 text-green-500 font-bold hover:underline cursor-pointer"
+                    >
+                      {msg.id === playingVoiceId ? '[pause]' : '[play]'}
+                    </button>
+                  </span>
+                ) : (
+                  <span>{msg.text}</span>
+                )}
+                
+                <span className="text-green-900 select-none">-&gt;</span>
+                {isMe && !msg.deletedForEveryone && <span className="text-green-400 font-medium">{statusStr}</span>}
+                <span className="text-green-600/80">{timeStr}</span>
+              </div>
             );
           })}
         </div>
 
         <div ref={messagesEndRef} />
+
+        {/* Blinking CLI line at bottom of the messages list when not active */}
+        {!isFooterActive && (
+          <div className="mt-4 border-t border-green-950/30 pt-3">
+            <button
+              onClick={() => {
+                setIsFooterActive(true);
+                setTimeout(() => {
+                  inputRef.current?.focus();
+                  scrollToBottom();
+                }, 120);
+              }}
+              className="flex items-center text-xs font-mono text-[#22c55e] hover:text-green-400 focus:outline-none cursor-pointer bg-transparent border-none text-left p-1"
+            >
+              <span>&gt; type a command</span>
+              <span className="cursor-blink font-bold ml-1 text-green-400">_</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* FLOATING SCROLL CONTROLLER BADGE */}
@@ -634,169 +676,110 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       />
 
       {/* 3. INPUT PANEL & ACTIVE REPLY PREVIEW CONTROLS */}
-      <div className="bg-neutral-950 border-t border-neutral-900/60 flex flex-col flex-none pb-[env(safe-area-inset-bottom,8px)] pt-1">
-        
-        {/* REPLY PREVIEW BAR */}
-        <AnimatePresence>
-          {replyingTo && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="bg-[#090a0f] border-b border-neutral-900 px-4 py-2 flex items-center justify-between"
-            >
-              <div className="flex items-center space-x-2 text-left">
-                <CornerUpRight size={14} className="text-indigo-400 flex-shrink-0" />
-                <div className="truncate max-w-[280px]">
-                  <span className="block text-[9px] font-mono uppercase text-neutral-500">
-                    Replying to @{replyingTo.senderId}
-                  </span>
-                  <span className="text-[11px] font-sans text-neutral-300 truncate block">
-                    {replyingTo.text}
+      {isFooterActive && (
+        <div className="bg-[#020202] border-t border-green-950 flex flex-col flex-none pb-[env(safe-area-inset-bottom,8px)] pt-1 select-none">
+          
+          {/* REPLY PREVIEW BAR */}
+          <AnimatePresence>
+            {replyingTo && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="bg-[#050505] border-b border-green-950 px-4 py-1.5 flex items-center justify-between text-[11px]"
+              >
+                <div className="flex items-center space-x-2 text-left text-green-600 font-mono">
+                  <span>[&gt; reply: @{replyingTo.senderId}]</span>
+                  <span className="truncate max-w-[200px] text-green-700 italic">
+                    "{replyingTo.text}"
                   </span>
                 </div>
-              </div>
-              <button
-                onClick={handleCancelReply}
-                className="p-1 rounded-full bg-neutral-900 text-neutral-400 hover:text-neutral-200 transition"
-                aria-label="Cancel reply"
-              >
-                <X size={13} />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {isRecording ? (
-          /* Active Recording Stage Overlay */
-          <div className="h-16 px-4 flex items-center justify-between bg-neutral-950 text-xs font-sans relative overflow-hidden border-t border-neutral-900/40">
-            <div className="flex items-center space-x-3">
-              {/* Red pulsing recording dot */}
-              <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
-              <span className="font-mono text-neutral-300">
-                {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
-              </span>
-            </div>
-
-            {/* Live Waveform Indicator */}
-            <div className="flex-1 max-w-[120px] sm:max-w-[160px] mx-2">
-              <WaveformView isLive={true} liveLevels={recordingWaveform} barCount={15} height={20} />
-            </div>
-
-            {/* Slide to Cancel slider and text */}
-            <div 
-              className="flex items-center space-x-1 text-[11px] text-neutral-400 select-none transition-all duration-100"
-              style={{
-                transform: `translateX(${Math.max(-100, Math.min(0, draggedX))}px)`,
-                opacity: draggedX < -80 ? 0.6 : 1,
-              }}
-            >
-              <span className={draggedX < -80 ? 'text-rose-400 font-semibold' : ''}>
-                {draggedX < -80 ? 'Lepas untuk batal' : '← Geser kiri untuk batal'}
-              </span>
-            </div>
-          </div>
-        ) : recordedBlob ? (
-          /* Preview Stage Overlay */
-          <div className="h-16 px-4 flex items-center justify-between bg-neutral-950 text-xs font-sans border-t border-neutral-900/40">
-            <div className="flex items-center space-x-3 flex-1">
-              {/* Play/Pause Button */}
-              <button
-                type="button"
-                onClick={handleTogglePreviewPlay}
-                className="w-9 h-9 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition active:scale-95"
-                title={isPreviewPlaying ? 'Pause' : 'Play'}
-                aria-label={isPreviewPlaying ? 'Pause preview' : 'Play preview'}
-              >
-                {isPreviewPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} className="ml-0.5" fill="currentColor" />}
-              </button>
-
-              {/* Static Waveform visualization */}
-              <div className="flex-1 max-w-[100px] sm:max-w-[150px]">
-                <WaveformView
-                  isLive={false}
-                  progress={recordedDuration > 0 ? (previewProgress / recordedDuration) * 100 : 0}
-                  seedId="preview"
-                  barCount={16}
-                  height={18}
-                />
-              </div>
-
-              {/* Duration Text */}
-              <span className="font-mono text-[10px] text-neutral-400">
-                {Math.floor(previewProgress / 60)}:{(Math.floor(previewProgress) % 60).toString().padStart(2, '0')}
-                {' / '}
-                {Math.floor(recordedDuration / 60)}:{(recordedDuration % 60).toString().padStart(2, '0')}
-              </span>
-            </div>
-
-            <div className="flex items-center space-x-2 ml-3">
-              {/* Discard / Delete Button */}
-              <button
-                type="button"
-                onClick={handleDiscardVoiceNote}
-                className="w-9 h-9 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-rose-400 hover:border-rose-950 transition flex items-center justify-center active:scale-95"
-                title="Hapus rekaman"
-                aria-label="Hapus rekaman"
-              >
-                <Trash2 size={14} />
-              </button>
-
-              {/* Send Button */}
-              <button
-                type="button"
-                disabled={isUploading}
-                onClick={handleSendVoiceNote}
-                className="w-11 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-900 text-white disabled:text-neutral-600 transition flex items-center justify-center active:scale-95"
-                title="Kirim voice note"
-                aria-label="Kirim voice note"
-              >
-                {isUploading ? (
-                  <Loader2 size={14} className="animate-spin text-neutral-400" />
-                ) : (
-                  <Send size={14} />
-                )}
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* Default Text Input and Microphone form */
-          <form 
-            onSubmit={handleSend}
-            className="h-16 px-3.5 flex items-center space-x-2"
-          >
-            {/* Custom Keyboard Toggle Button - Only visible if custom keyboard is selected in settings */}
-            {settings.keyboardType === 'custom' && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsKeyboardOpen(!isKeyboardOpen);
-                  if (!isKeyboardOpen) {
-                    setTimeout(() => {
-                      inputRef.current?.focus();
-                      scrollToBottom();
-                    }, 100);
-                  }
-                }}
-                title={isKeyboardOpen ? "Sembunyikan Keyboard" : "Tampilkan Keyboard"}
-                aria-label={isKeyboardOpen ? "Sembunyikan Keyboard" : "Tampilkan Keyboard"}
-                className={`p-2.5 rounded-xl border transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-[0.97] ${
-                  isKeyboardOpen
-                    ? 'bg-indigo-950/40 border-indigo-900/60 text-indigo-400'
-                    : 'bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-400 hover:text-indigo-400'
-                }`}
-              >
-                <KeyboardIcon size={14} />
-              </button>
+                <button
+                  onClick={handleCancelReply}
+                  className="hover:text-red-400 transition font-bold text-red-500"
+                  aria-label="Cancel reply"
+                >
+                  [cancel]
+                </button>
+              </motion.div>
             )}
+          </AnimatePresence>
 
-            <div className="flex-1 relative flex items-center">
+          {isRecording ? (
+            /* Active Recording Stage Overlay */
+            <div className="h-12 px-4 flex items-center justify-between bg-[#020202] text-xs font-mono text-red-500 relative overflow-hidden border-t border-green-950">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-red-600 rounded-full cursor-blink" />
+                <span>REC: {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}</span>
+              </div>
+
+              {/* Slide to Cancel slider and text */}
+              <div 
+                className="flex items-center space-x-1 text-[11px] select-none transition-all duration-100 text-green-700"
+                style={{
+                  transform: `translateX(${Math.max(-100, Math.min(0, draggedX))}px)`,
+                  opacity: draggedX < -80 ? 0.6 : 1,
+                }}
+              >
+                <span className={draggedX < -80 ? 'text-red-400 font-semibold' : ''}>
+                  {draggedX < -80 ? '[release to clear]' : '← [slide left to abort]'}
+                </span>
+              </div>
+            </div>
+          ) : recordedBlob ? (
+            /* Preview Stage Overlay */
+            <div className="h-12 px-4 flex items-center justify-between bg-[#020202] text-xs font-mono border-t border-green-950 text-[#22c55e]">
+              <div className="flex items-center space-x-3 flex-1">
+                <button
+                  type="button"
+                  onClick={handleTogglePreviewPlay}
+                  className="font-bold hover:underline hover:text-green-300"
+                  aria-label={isPreviewPlaying ? 'Pause preview' : 'Play preview'}
+                >
+                  [{isPreviewPlaying ? 'pause' : 'play-preview'}]
+                </button>
+
+                <span className="text-[10px] text-green-600">
+                  {Math.floor(previewProgress / 60)}:{(Math.floor(previewProgress) % 60).toString().padStart(2, '0')}
+                  {' / '}
+                  {Math.floor(recordedDuration / 60)}:{(recordedDuration % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+
+              <div className="flex items-center space-x-3 ml-3 font-bold">
+                <button
+                  type="button"
+                  onClick={handleDiscardVoiceNote}
+                  className="text-red-500 hover:text-red-400 hover:underline"
+                  aria-label="Discard recording"
+                >
+                  [discard]
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isUploading}
+                  onClick={handleSendVoiceNote}
+                  className="text-green-400 hover:text-green-300 hover:underline disabled:text-green-900"
+                  aria-label="Send voice note"
+                >
+                  {isUploading ? '[uploading...]' : '[transmit]'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Default Text Input and Microphone form */
+            <form 
+              onSubmit={handleSend}
+              className="h-12 px-4 flex items-center space-x-2 text-xs font-mono"
+            >
+              <span className="text-green-400 font-bold select-none">&gt;</span>
               <input
                 ref={inputRef}
                 type="text"
                 inputMode={settings.keyboardType === 'custom' ? 'none' : 'text'}
                 autoComplete="off"
-                placeholder={`Message ${activeTargetUser.displayName}...`}
+                placeholder="type message..."
                 value={text}
                 onChange={handleInputChange}
                 onFocus={() => {
@@ -807,51 +790,74 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                     scrollToBottom();
                   }, 150);
                 }}
-                className="w-full px-4 py-2.5 bg-[#090a0f] border border-neutral-900 focus:border-indigo-900 text-neutral-200 placeholder-neutral-600 rounded-xl text-base sm:text-xs focus:outline-none focus:ring-0 transition-all font-sans"
+                className="flex-1 bg-transparent border-none text-[#22c55e] placeholder-green-900 text-xs focus:outline-none focus:ring-0 font-mono py-1"
               />
-            </div>
 
-            {text.trim() ? (
-              /* Standard Send button */
-              <button
-                type="submit"
-                title="Send encrypted message"
-                aria-label="Send encrypted message"
-                className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-xl border border-indigo-500/20 transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-[0.97]"
-              >
-                <Send size={14} />
-              </button>
-            ) : (
-              /* Microphone button for voice notes (holding triggers voice recorder) */
+              {text.trim() ? (
+                /* Standard Send button */
+                <button
+                  type="submit"
+                  title="Send message packet"
+                  aria-label="Send message packet"
+                  className="hover:text-green-300 font-bold hover:underline cursor-pointer py-1 px-2"
+                >
+                  [send]
+                </button>
+              ) : (
+                /* Microphone button for voice notes (holding triggers voice recorder) */
+                <button
+                  type="button"
+                  onMouseDown={handleMicPressStart}
+                  onTouchStart={handleMicPressStart}
+                  title="Hold to record voice note"
+                  aria-label="Hold to record voice note"
+                  className="hover:text-green-300 font-bold hover:underline cursor-pointer py-1 px-2 select-none touch-none text-green-700"
+                >
+                  [rec]
+                </button>
+              )}
+
+              {settings.keyboardType === 'custom' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsKeyboardOpen(!isKeyboardOpen);
+                  }}
+                  className="hover:text-green-300 font-bold hover:underline cursor-pointer py-1 px-2"
+                >
+                  [{isKeyboardOpen ? 'hide-kb' : 'show-kb'}]
+                </button>
+              )}
+
               <button
                 type="button"
-                onMouseDown={handleMicPressStart}
-                onTouchStart={handleMicPressStart}
-                title="Hold to record voice note"
-                aria-label="Hold to record voice note"
-                className="bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-neutral-400 hover:text-indigo-400 p-2.5 rounded-xl transition cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-[0.97] select-none touch-none"
+                onClick={() => {
+                  setIsFooterActive(false);
+                  setIsKeyboardOpen(false);
+                }}
+                className="hover:text-red-400 font-bold hover:underline cursor-pointer py-1 px-2 text-red-500"
               >
-                <Mic size={14} />
+                [exit]
               </button>
-            )}
-          </form>
-        )}
+            </form>
+          )}
 
-        {/* Custom Native-App-style Virtual Keyboard */}
-        {settings.keyboardType === 'custom' && isKeyboardOpen && !isRecording && !recordedBlob && (
-          <div className="w-full">
-            <VirtualKeyboard
-              onKeyPress={insertText}
-              onBackspace={handleBackspace}
-              onSpace={handleSpace}
-              onEnter={() => handleSend()}
-              onClose={() => setIsKeyboardOpen(false)}
-              enterLabel="Kirim"
-              height={settings.keyboardHeight}
-            />
-          </div>
-        )}
-      </div>
+          {/* Custom Native-App-style Virtual Keyboard */}
+          {settings.keyboardType === 'custom' && isKeyboardOpen && !isRecording && !recordedBlob && (
+            <div className="w-full bg-[#020202] border-t border-green-950">
+              <VirtualKeyboard
+                onKeyPress={insertText}
+                onBackspace={handleBackspace}
+                onSpace={handleSpace}
+                onEnter={() => handleSend()}
+                onClose={() => setIsKeyboardOpen(false)}
+                enterLabel="Kirim"
+                height={settings.keyboardHeight}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 4. REUSABLE SYSTEM SNACKBAR */}
       <AnimatePresence>
@@ -862,12 +868,10 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
             exit={{ opacity: 0, y: 15 }}
             className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
           >
-            <div className={`px-4 py-2 rounded-xl text-[11px] font-semibold tracking-wide font-mono border shadow-2xl flex items-center space-x-2 ${
+            <div className={`px-4 py-2 rounded border text-xs font-mono shadow-2xl flex items-center space-x-2 ${
               snackbar.type === 'error'
-                ? 'bg-rose-950/95 border-rose-900/60 text-rose-300'
-                : snackbar.type === 'info'
-                  ? 'bg-[#0a0c12]/95 border-neutral-800/80 text-indigo-400'
-                  : 'bg-indigo-950/95 border-indigo-900/50 text-indigo-300'
+                ? 'bg-red-950 border-red-900 text-red-400'
+                : 'bg-green-950 border-green-900 text-green-400'
             }`}>
               <span>{snackbar.text}</span>
             </div>

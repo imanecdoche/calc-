@@ -201,7 +201,7 @@ export default function SecretMessengerScreen({
     const cleanPassword = myPasswordInput.trim();
 
     if (!cleanUsername) {
-      setRegisterError('Username tidak boleh kosong.');
+      setRegisterError('Entity tidak boleh kosong.');
       setShakeTrigger(true);
       setTimeout(() => setShakeTrigger(false), 500);
       return;
@@ -209,7 +209,7 @@ export default function SecretMessengerScreen({
 
     // Validate character format (standard lowercase alphanumeric)
     if (!/^[a-z0-9]{3,15}$/.test(cleanUsername)) {
-      setRegisterError('Username harus 3-15 karakter huruf kecil (a-z) dan angka (0-9).');
+      setRegisterError('Entity harus 3-15 karakter huruf kecil (a-z) dan angka (0-9).');
       setShakeTrigger(true);
       setTimeout(() => setShakeTrigger(false), 500);
       return;
@@ -244,11 +244,11 @@ export default function SecretMessengerScreen({
       const res = await viewModel.registerMyUsername(cleanUsername, cleanPassword);
       setIsSubmitting(false);
       if (res.success) {
-        showToast(`Username @${cleanUsername} berhasil didaftarkan!`, 'success');
+        showToast(`Entity @${cleanUsername} berhasil didaftarkan!`, 'success');
         setMyUsernameInput('');
         setMyPasswordInput('');
       } else {
-        setRegisterError(res.error || 'Username sudah terpakai.');
+        setRegisterError(res.error || 'Entity sudah terpakai.');
         setShakeTrigger(true);
         setTimeout(() => setShakeTrigger(false), 500);
         showToast(res.error || 'Pendaftaran gagal.', 'error');
@@ -440,14 +440,14 @@ export default function SecretMessengerScreen({
                 <p className="text-[11px] text-neutral-500 text-center mb-6 max-w-[240px]">
                   {isLoginMode 
                     ? 'Masuk ke identitas terdaftar Anda agar terhubung lintas perangkat.' 
-                    : 'Pilih nama pengguna dan kata sandi unik untuk identitas terenkripsi Anda.'}
+                    : 'Pilih nama entity dan kata sandi unik untuk identitas terenkripsi Anda.'}
                 </p>
 
                 {/* Form Auth */}
                 <form onSubmit={handleAuthSubmit} className="w-full space-y-3.5">
                   <div className="space-y-1">
                     <label htmlFor="my-username" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">
-                      Username
+                      Entity
                     </label>
                     <motion.div
                       animate={shakeTrigger ? { x: [-6, 6, -6, 6, 0] } : {}}
@@ -539,7 +539,7 @@ export default function SecretMessengerScreen({
                       <Loader2 size={13} className="animate-spin text-neutral-500" />
                     ) : (
                       <>
-                        <span>{isLoginMode ? 'Login ke Akun' : 'Daftar Username'}</span>
+                        <span>{isLoginMode ? 'Login ke Akun' : 'Daftar Entity'}</span>
                         <ArrowRight size={12} className="text-neutral-600" />
                       </>
                     )}
@@ -577,11 +577,6 @@ export default function SecretMessengerScreen({
                 <div className="w-14 h-14 rounded-xl bg-[#121212] border border-neutral-850 flex items-center justify-center shadow-md mb-5 relative group">
                   <MessageSquare size={24} className="text-neutral-300" />
                 </div>
-
-                {/* Title */}
-                <h1 className="font-bold text-sm tracking-tight text-neutral-150 text-center mb-1">
-                  Secret Messenger
-                </h1>
 
                 {/* My Username Display Menu */}
                 <div className="flex flex-col items-center space-y-2 mb-8 w-full max-w-xs">
@@ -649,7 +644,7 @@ export default function SecretMessengerScreen({
                 <form onSubmit={handleConnect} className="w-full space-y-4">
                   <div className="space-y-1.5">
                     <label htmlFor="target-username" className="block text-[10px] font-mono tracking-wider text-neutral-500 uppercase">
-                      ENTER DESTINATION USERNAME
+                      ENTER DESTINATION ENTITY
                     </label>
                     <motion.div
                       animate={shakeTrigger ? { x: [-6, 6, -6, 6, 0] } : {}}
@@ -791,9 +786,9 @@ export default function SecretMessengerScreen({
           <div className="flex justify-between items-center px-4 py-1 text-xs text-neutral-500 font-mono select-none">
             <span className="uppercase text-[9px] tracking-wider text-neutral-400 flex items-center gap-1.5">
               <KeyboardIcon size={10} />
-              {activeInputField === 'my-username' && 'Ketik Username Anda'}
+              {activeInputField === 'my-username' && 'Ketik Entity Anda'}
               {activeInputField === 'my-password' && 'Ketik Sandi Anda'}
-              {activeInputField === 'target-username' && 'Ketik Username Tujuan'}
+              {activeInputField === 'target-username' && 'Ketik Entity Tujuan'}
               {activeInputField === 'new-password' && 'Buat Sandi Baru'}
             </span>
             <button

@@ -29,17 +29,20 @@ export default function UnlockScreen({
     };
   }, []);
 
-  const handleUnlock = () => {
-    if (inputPass === correctPasswordVal) {
-      showToast('Vault decrypted successfully.', 'success');
-      onUnlockSuccess();
-    } else {
-      setShake(true);
-      showToast('Access Key rejected. Please try again.', 'error');
-      setTimeout(() => setShake(false), 500);
-      setInputPass('');
+  // Auto-unlock when password length matches correct value
+  useEffect(() => {
+    if (inputPass.length > 0 && inputPass.length === correctPasswordVal.length) {
+      if (inputPass === correctPasswordVal) {
+        showToast('Decryption successful.', 'success');
+        onUnlockSuccess();
+      } else {
+        setShake(true);
+        showToast('Authentication rejected.', 'error');
+        setTimeout(() => setShake(false), 500);
+        setInputPass('');
+      }
     }
-  };
+  }, [inputPass, correctPasswordVal, onUnlockSuccess, showToast]);
 
   const handleKeyPress = (char: string) => {
     if (char === '⌫') {
@@ -47,7 +50,10 @@ export default function UnlockScreen({
     } else if (char === 'CLEAR') {
       setInputPass('');
     } else {
-      setInputPass(prev => prev + char);
+      // Avoid typing more than the passcode length
+      if (inputPass.length < correctPasswordVal.length) {
+        setInputPass(prev => prev + char);
+      }
     }
   };
 
@@ -56,50 +62,32 @@ export default function UnlockScreen({
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a] text-neutral-100 font-sans select-none overflow-hidden relative">
       
-      {/* Header bar */}
-      <div className="flex items-center px-4 py-4 border-b border-neutral-900 bg-[#0a0a0a] sticky top-0 z-10">
+      {/* Header bar - no text, just minimal back button */}
+      <div className="flex items-center px-4 py-4 bg-[#0a0a0a] sticky top-0 z-10">
         <button
           onClick={onCancel}
           className="p-2.5 rounded-xl hover:bg-neutral-900 text-neutral-400 hover:text-neutral-100 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center mr-2 border border-transparent hover:border-neutral-800"
-          aria-label="Back to Calculator"
+          aria-label="Back"
         >
           <ArrowLeft size={18} />
         </button>
-        <span className="font-semibold text-neutral-400 text-xs tracking-wider uppercase font-mono">Secure Enclave</span>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6 py-8">
+      <div className="flex-1 flex flex-col justify-center items-center px-6 pb-12">
         
-        {/* Shield Icon animation */}
+        {/* Password Display Field - completely unlabelled and with no placeholder */}
         <motion.div 
           animate={shake ? { x: [-10, 10, -10, 10, -5, 5, -2, 2, 0] } : {}}
           transition={{ duration: 0.5 }}
-          className="mb-6 p-3.5 rounded-2xl bg-[#121212] border border-neutral-800 flex items-center justify-center text-neutral-300"
-        >
-          <Lock size={24} className={shake ? "text-rose-500" : "text-neutral-300"} />
-        </motion.div>
-
-        {/* Title */}
-        <h1 className="text-xl font-bold tracking-tight text-neutral-100 mb-1.5">
-          ACCESS KEY
-        </h1>
-        <p className="text-xs text-neutral-500 max-w-[280px] text-center mb-8 leading-relaxed">
-          Enter the secure passcode to decrypt and unlock the private partition.
-        </p>
-
-        {/* Password Display Field */}
-        <motion.div 
-          animate={shake ? { x: [-10, 10, -10, 10, -5, 5, -2, 2, 0] } : {}}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-xs flex items-center bg-[#121212] border border-neutral-800 rounded-xl px-4 py-3 mb-3 focus-within:border-neutral-700 transition-all"
+          className="w-full max-w-xs flex items-center bg-[#121212] border border-neutral-850 rounded-xl px-4 py-3 mb-8 focus-within:border-neutral-700 transition-all shadow-inner"
         >
           <input
             type={showPass ? 'text' : 'password'}
             value={inputPass}
             readOnly
-            placeholder="••••••••"
-            className="w-full text-center bg-transparent border-none text-2xl font-mono tracking-widest text-neutral-100 outline-none select-none placeholder:text-neutral-800 placeholder:text-lg"
+            placeholder=""
+            className="w-full text-center bg-transparent border-none text-2xl font-mono tracking-widest text-neutral-100 outline-none select-none"
           />
           <button
             type="button"
@@ -110,33 +98,15 @@ export default function UnlockScreen({
           </button>
         </motion.div>
 
-        {/* Unlock Button */}
-        <div className="w-full max-w-xs mb-8">
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={handleUnlock}
-            disabled={!inputPass}
-            className={`w-full py-3.5 rounded-xl font-medium tracking-wide text-xs transition-all duration-200 flex items-center justify-center space-x-2 cursor-pointer min-h-[44px] ${
-              inputPass 
-                ? 'bg-neutral-200 hover:bg-white text-neutral-950 font-bold' 
-                : 'bg-[#121212] text-neutral-600 border border-neutral-900 cursor-not-allowed font-medium'
-            }`}
-          >
-            <ShieldCheck size={16} />
-            <span>DECRYPT STORAGE</span>
-          </motion.button>
-        </div>
-
-        {/* Custom Numeric Pad for instant entry */}
+        {/* Custom Numeric Pad */}
         <div className="w-full max-w-xs grid grid-cols-3 gap-2 flex-none">
           {numKeys.map((key) => {
-            let style = 'bg-[#121212] hover:bg-[#16161c] text-neutral-200 border border-neutral-900/60';
-            let label = key;
+            let style = 'bg-[#121212] hover:bg-[#16161c] text-neutral-200 border border-neutral-900/60 shadow-sm';
 
             if (key === 'CLEAR') {
-              style = 'text-xs text-neutral-400 hover:bg-neutral-900 border border-neutral-900/60';
+              style = 'text-xs text-neutral-400 hover:bg-neutral-900 border border-neutral-900/60 shadow-sm';
             } else if (key === '⌫') {
-              style = 'text-neutral-400 hover:bg-neutral-900 border border-neutral-900/60';
+              style = 'text-neutral-400 hover:bg-neutral-900 border border-neutral-900/60 shadow-sm';
             }
 
             return (
@@ -144,15 +114,13 @@ export default function UnlockScreen({
                 key={key}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => handleKeyPress(key)}
-                className={`flex items-center justify-center h-12 rounded-xl text-lg font-mono transition-all cursor-pointer min-h-[44px] ${style}`}
+                className={`flex items-center justify-center h-14 rounded-xl text-lg font-mono transition-all cursor-pointer min-h-[44px] ${style}`}
               >
-                {label}
+                {key}
               </motion.button>
             );
           })}
         </div>
-
-
 
       </div>
     </div>

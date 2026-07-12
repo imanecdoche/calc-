@@ -264,6 +264,15 @@ export default function SettingsScreen({
 
   const changelogs: ChangelogEntry[] = [
     {
+      version: 'v2.2.0',
+      date: '2026-07-12',
+      changes: [
+        { type: 'added', text: 'Menghapus referensi teks "Secret Messenger" untuk penyamaran (disguise) yang lebih aman' },
+        { type: 'added', text: 'Mengganti istilah "username" menjadi "entity" di seluruh antarmuka pengguna' },
+        { type: 'improved', text: 'Menyederhanakan layar Access Key (Unlock) hanya menampilkan input field dan numpad tanpa teks instruksi atau placeholder' }
+      ]
+    },
+    {
       version: 'v2.1.0',
       date: '2026-07-12',
       changes: [
@@ -497,7 +506,7 @@ export default function SettingsScreen({
             {!myUsername ? (
               <div className="text-center py-5 bg-[#0a0a0a]/50 rounded-xl border border-neutral-900/60 p-4">
                 <p className="text-[11px] text-neutral-400 leading-relaxed">
-                  Silakan masuk atau daftar akun Chat terlebih dahulu pada layar Secret Messenger untuk dapat mengelola pintasan rahasia Anda.
+                  Silakan masuk atau daftar akun Chat terlebih dahulu pada layar Secure Chat untuk dapat mengelola pintasan rahasia Anda.
                 </p>
               </div>
             ) : (
@@ -519,7 +528,7 @@ export default function SettingsScreen({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label htmlFor="shortcut-target" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">Username Kontak Target *</label>
+                      <label htmlFor="shortcut-target" className="block text-[9px] font-mono tracking-wider text-neutral-500 uppercase">Entity Kontak Target *</label>
                       <input
                         id="shortcut-target"
                         type="text"
@@ -616,7 +625,7 @@ export default function SettingsScreen({
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 rounded-xl bg-[#0a0a0a] border border-neutral-900/60">
                 <div>
-                  <span className="text-xs text-neutral-400 block font-mono">Username Anda</span>
+                  <span className="text-xs text-neutral-400 block font-mono">Entity Anda</span>
                   <span className="text-xs font-bold text-neutral-100 font-mono">@{chatViewModel.myUsername}</span>
                 </div>
                 <div className="px-2 py-0.5 rounded bg-neutral-950 text-[9px] text-neutral-500 font-mono border border-neutral-900">
@@ -666,15 +675,15 @@ export default function SettingsScreen({
                   <span>Keluar dari Akun (Logout)</span>
                 </button>
                 <p className="text-[10px] text-neutral-500 text-center leading-relaxed">
-                  Gunakan tombol ini jika ingin login dengan username lain pada perangkat ini.
+                  Gunakan tombol ini jika ingin login dengan entity lain pada perangkat ini.
                 </p>
               </div>
             </div>
           ) : (
             <div className="p-3 text-center bg-[#0a0a0a] rounded-xl border border-neutral-900/60">
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Anda belum mendaftarkan username chat.<br />
-                Silakan buka tab <span className="text-neutral-300 font-bold">Secret Messenger</span> untuk mendaftar.
+                Anda belum mendaftarkan entity chat.<br />
+                Silakan buka tab <span className="text-neutral-300 font-bold">Secure Chat</span> untuk mendaftar.
               </p>
             </div>
           )}
