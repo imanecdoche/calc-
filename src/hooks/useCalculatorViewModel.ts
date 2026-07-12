@@ -196,16 +196,6 @@ export function useCalculatorViewModel() {
       nextExpr = expression + value;
     }
 
-    // Direct Fullscreen checking on typing
-    if (value !== '=') {
-      const cleanNext = nextExpr.replace(/\s+/g, '');
-      const isPrefix = cleanNext !== '' && ('1+2+3'.startsWith(cleanNext) || '3+2+1'.startsWith(cleanNext));
-      if (isPrefix) {
-        FullscreenManager.getInstance().setSecretSessionActive(true);
-      } else {
-        FullscreenManager.getInstance().setSecretSessionActive(false);
-      }
-    }
   };
 
   const evaluateResult = () => {
@@ -280,13 +270,13 @@ export function useCalculatorViewModel() {
     if (isSecret) {
       FullscreenManager.getInstance().setSecretSessionActive(true);
     } else if (screen === 'calculator') {
-      const cleanExpr = expression.replace(/\s+/g, '');
-      const isPrefix = cleanExpr !== '' && ('1+2+3'.startsWith(cleanExpr) || '3+2+1'.startsWith(cleanExpr));
-      if (!isPrefix) {
+      if (isTriggered || isDevTriggered) {
+        FullscreenManager.getInstance().setSecretSessionActive(true);
+      } else {
         FullscreenManager.getInstance().setSecretSessionActive(false);
       }
     }
-  }, [screen, prevScreen, expression]);
+  }, [screen, prevScreen, isTriggered, isDevTriggered]);
 
   // --- Access Key Password Operations ---
   const changePassword = (newPass: string) => {

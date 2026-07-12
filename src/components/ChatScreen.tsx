@@ -37,6 +37,26 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Manage visual viewport height to prevent keyboard obscuring
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!window.visualViewport) return;
+
+    const handleResize = () => {
+      setViewportHeight(window.visualViewport ? window.visualViewport.height : window.innerHeight);
+    };
+
+    window.visualViewport.addEventListener('resize', handleResize);
+    window.visualViewport.addEventListener('scroll', handleResize);
+    handleResize();
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleResize);
+      window.visualViewport?.removeEventListener('scroll', handleResize);
+    };
+  }, []);
+
   // M3 UI & Interactive states
   const [longPressedMessage, setLongPressedMessage] = useState<Message | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -352,10 +372,13 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
   if (!activeTargetUser) return null;
 
   return (
-    <div className="absolute inset-0 bg-[#07080b] flex flex-col justify-between z-20">
+    <div 
+      className="absolute inset-0 bg-[#07080b] flex flex-col justify-between z-20"
+      style={viewportHeight ? { height: `${viewportHeight}px`, bottom: 'auto' } : {}}
+    >
       
       {/* 1. CHAT ROOM HEADER */}
-      <div className="h-14 bg-neutral-950/90 border-b border-neutral-900/60 flex items-center justify-between px-3.5 backdrop-blur-md flex-none z-10">
+      <div className="min-h-14 h-auto pt-[env(safe-area-inset-top,0px)] pb-1.5 bg-neutral-950/90 border-b border-neutral-900/60 flex items-center justify-between px-3.5 backdrop-blur-md flex-none z-10">
         
         <div className="flex items-center space-x-2.5">
           {/* Back to Connect screen (which clears session history) */}
@@ -512,7 +535,7 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
       />
 
       {/* 3. INPUT PANEL & ACTIVE REPLY PREVIEW CONTROLS */}
-      <div className="bg-neutral-950 border-t border-neutral-900/60 flex flex-col flex-none">
+      <div className="bg-neutral-950 border-t border-neutral-900/60 flex flex-col flex-none pb-[env(safe-area-inset-bottom,8px)] pt-1">
         
         {/* REPLY PREVIEW BAR */}
         <AnimatePresence>
@@ -647,6 +670,7 @@ export default function ChatScreen({ viewModel, onStartVoiceCall }: ChatScreenPr
               <input
                 ref={inputRef}
                 type="text"
+                autoComplete="off"
                 placeholder={`Message ${activeTargetUser.displayName}...`}
                 value={text}
                 onChange={handleInputChange}

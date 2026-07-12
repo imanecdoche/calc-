@@ -68,16 +68,16 @@ export function MessageBubble({
   // Render status checkmarks next to our message timestamps
   const renderMessageStatus = (status?: 'sending' | 'sent' | 'delivered' | 'failed') => {
     if (status === 'sending') {
-      return <Clock size={10} className="text-indigo-200/50 animate-pulse ml-1" />;
+      return <Clock size={9} className="text-neutral-600 animate-pulse ml-0.5" />;
     }
     if (status === 'delivered') {
-      return <CheckCheck size={11} className="text-emerald-400 font-bold ml-1" />;
+      return <CheckCheck size={10} className="text-emerald-500 ml-0.5" />;
     }
     if (status === 'failed') {
-      return <AlertCircle size={11} className="text-rose-400 ml-1" />;
+      return <AlertCircle size={10} className="text-rose-500 ml-0.5" />;
     }
     // Default 'sent' status
-    return <Check size={11} className="text-indigo-200/70 ml-1" />;
+    return <Check size={10} className="text-neutral-500 ml-0.5" />;
   };
 
   return (
@@ -106,7 +106,7 @@ export function MessageBubble({
         
         {/* Reply Quote box inside the bubble */}
         {message.replyToId && !isDeleted && (
-          <div className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-t-xl text-[10px] bg-[#090a0f]/40 border-l-2 border-indigo-500 max-w-full ${
+          <div className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-t-[18px] text-[10px] bg-[#090a0f]/40 border-l-2 border-indigo-500 max-w-full ${
             isMe ? 'bg-indigo-900/40 text-indigo-200' : 'bg-neutral-950/50 text-neutral-400'
           }`}>
             <CornerUpRight size={10} className="text-indigo-400 flex-shrink-0" />
@@ -120,14 +120,16 @@ export function MessageBubble({
 
         {/* Message bubble core styling */}
         <div 
-          className={`px-3.5 py-2.5 rounded-2xl flex flex-col space-y-1.5 max-w-full ${
+          className={`px-4 py-2.5 flex flex-col justify-center max-w-full ${
+            message.replyToId && !isDeleted ? 'rounded-b-[18px] rounded-t-none border-t-0' : 'rounded-[18px]'
+          } ${
             isDeleted 
               ? 'bg-[#0a0c10]/40 border border-neutral-900/60 text-neutral-500 italic'
               : isFailed
                 ? 'bg-rose-950/20 border border-rose-900/40 text-rose-300'
                 : isMe
-                  ? `bg-indigo-600 text-white shadow-lg shadow-indigo-950/15 ${message.replyToId ? 'rounded-tr-none' : 'rounded-br-none'}`
-                  : `bg-neutral-900 border border-neutral-800/80 text-neutral-200 shadow-md ${message.replyToId ? 'rounded-tl-none' : 'rounded-bl-none'}`
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-950/15'
+                  : 'bg-neutral-900 border border-neutral-800/80 text-neutral-200 shadow-md'
           }`}
         >
           {isDeleted ? (
@@ -142,20 +144,26 @@ export function MessageBubble({
               {message.text}
             </p>
           )}
+        </div>
 
-          {/* Time & Status checkrow aligned nicely in bottom right corner */}
-          <div className="flex items-center justify-end space-x-1 self-end mt-0.5">
-            <span className={`text-[8px] font-mono leading-none ${
-              isDeleted 
-                ? 'text-neutral-600'
-                : isMe 
-                  ? 'text-indigo-200/80' 
-                  : 'text-neutral-500'
-            }`}>
-              {formatTime(message.timestamp)}
-            </span>
-            {isMe && !isDeleted && renderMessageStatus(message.status)}
-          </div>
+        {/* Time & Status checkrow aligned nicely below the bubble */}
+        <div className="flex items-center space-x-1 px-1.5 mt-0.5 select-none text-[9px] font-mono text-neutral-500">
+          <span>{formatTime(message.timestamp)}</span>
+          {isMe && !isDeleted && (
+            <>
+              <span className="text-neutral-800">•</span>
+              <span className="uppercase tracking-wider text-[8px]">
+                {message.status === 'sending' 
+                  ? 'sending' 
+                  : message.status === 'delivered' 
+                    ? 'seen' 
+                    : message.status === 'failed' 
+                      ? 'failed' 
+                      : 'sent'}
+              </span>
+              {renderMessageStatus(message.status)}
+            </>
+          )}
         </div>
 
         {/* Failed Banner & Retry option */}

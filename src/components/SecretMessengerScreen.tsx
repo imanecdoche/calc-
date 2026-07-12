@@ -241,7 +241,7 @@ export default function SecretMessengerScreen({
     >
       
       {/* 1. Header (Sticky Top, Very Discreet) */}
-      <header className="h-14 bg-[#0a0a0a] border-b border-neutral-900 flex items-center justify-between px-4 sticky top-0 z-30 flex-none">
+      <header className="min-h-14 h-auto pt-[env(safe-area-inset-top,0px)] pb-1.5 bg-[#0a0a0a] border-b border-neutral-900 flex items-center justify-between px-4 sticky top-0 z-30 flex-none">
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
             <span className="font-mono text-[10px] tracking-wider text-neutral-500 font-bold">SECURE_NODE</span>
@@ -367,6 +367,10 @@ export default function SecretMessengerScreen({
                       <input
                         id="my-username"
                         type="text"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         placeholder="Contoh: alex01, ismael"
                         value={myUsernameInput}
                         onChange={(e) => {
@@ -559,6 +563,10 @@ export default function SecretMessengerScreen({
                       <input
                         id="target-username"
                         type="text"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         placeholder="Contoh: ismael, fernandez, alex01"
                         value={targetUsernameInput}
                         onChange={(e) => {
@@ -631,7 +639,7 @@ export default function SecretMessengerScreen({
       </div>
 
       {/* 3. Footer */}
-      <footer className="h-4 bg-[#0a0a0a] border-t border-neutral-950 flex items-center justify-between px-4 select-none flex-none">
+      <footer className="min-h-[16px] h-auto pt-1 pb-[env(safe-area-inset-bottom,4px)] bg-[#0a0a0a] border-t border-neutral-950 flex items-center justify-between px-4 select-none flex-none">
         {/* Simple footer for high visual cleanliness */}
       </footer>
 
