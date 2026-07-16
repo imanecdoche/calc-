@@ -112,7 +112,7 @@ export default function SettingsScreen({
   const toggleFullscreen = () => {
     try {
       if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-        FullscreenManager.getInstance().enterFullscreen();
+        FullscreenManager.getInstance().enterFullscreen(true);
         setIsFullscreen(true);
         showToast('Fullscreen enabled', 'info');
       } else {

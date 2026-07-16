@@ -89,16 +89,38 @@ export default function SecretMessengerScreen({
   const [terminalPendingUsername, setTerminalPendingUsername] = useState('');
   const [terminalState, setTerminalState] = useState<'app_access_key' | 'username' | 'passphrase' | 'destination'>('app_access_key');
 
-  // Force re-verification of the access key every single time the screen mounts
+  // Force re-verification of the access key every single time the screen mounts, unless entering via a secret shortcut
   useEffect(() => {
-    setSessionAccessVerified(false);
-    setTerminalState('app_access_key');
-    setTerminalPendingUsername('');
-    setTerminalAccessKeyInput('');
-    setMyUsernameInput('');
-    setMyPasswordInput('');
-    setActiveInputField('terminal-access-key');
-  }, []);
+    if (directTargetUser) {
+      setSessionAccessVerified(true);
+      if (viewModel.myUsername) {
+        setTerminalState('destination');
+        setActiveInputField('target-username');
+      } else {
+        setTerminalState('username');
+        setActiveInputField('my-username');
+      }
+      setTerminalPendingUsername('');
+      setTerminalAccessKeyInput('');
+      setMyUsernameInput('');
+      setMyPasswordInput('');
+    } else {
+      setSessionAccessVerified(false);
+      setTerminalState('app_access_key');
+      setTerminalPendingUsername('');
+      setTerminalAccessKeyInput('');
+      setMyUsernameInput('');
+      setMyPasswordInput('');
+      setActiveInputField('terminal-access-key');
+    }
+  }, [directTargetUser, viewModel.myUsername]);
+
+  // Auto-submit terminal access key when length matches the correct app passcode length
+  useEffect(() => {
+    if (terminalAccessKeyInput.length > 0 && terminalAccessKeyInput.length === appAccessKey.length) {
+      handleAccessKeySubmit(terminalAccessKeyInput);
+    }
+  }, [terminalAccessKeyInput, appAccessKey]);
 
   const handleAccessKeySubmit = (val: string) => {
     const cleanVal = val.trim();
@@ -132,27 +154,46 @@ export default function SecretMessengerScreen({
     setIsSubmitting(true);
     setRegisterError(null);
 
-    // Try to log in first with a standard password:
-    const loginRes = await viewModel.loginToExistingAccount(cleanVal, '123456');
-    if (loginRes.success) {
-      setIsSubmitting(false);
-      setMyUsernameInput('');
-      showToast(`Node authorized: @${cleanVal}`, 'success');
-      setTerminalState('destination');
-      setActiveInputField('target-username');
-    } else {
-      // Check if user doesn't exist or wrong password
-      const errorStr = loginRes.error || '';
-      const isWrongPassword = errorStr.toLowerCase().includes('sandi') || errorStr.toLowerCase().includes('password') || errorStr.toLowerCase().includes('wrong');
-      
-      if (isWrongPassword) {
+    if (isLoginMode) {
+      // Login Mode: Check existing account
+      const loginRes = await viewModel.loginToExistingAccount(cleanVal, '123456');
+      if (loginRes.success) {
         setIsSubmitting(false);
-        setTerminalPendingUsername(cleanVal);
-        setTerminalState('passphrase');
-        setActiveInputField('my-password');
-        setRegisterError('Passphrase required.');
+        setMyUsernameInput('');
+        showToast(`Node authorized: @${cleanVal}`, 'success');
+        setTerminalState('destination');
+        setActiveInputField('target-username');
       } else {
-        // Not found, so register a new one!
+        const errorStr = loginRes.error || '';
+        const isWrongPassword = errorStr.toLowerCase().includes('sandi') || errorStr.toLowerCase().includes('password') || errorStr.toLowerCase().includes('wrong');
+        
+        if (isWrongPassword) {
+          setIsSubmitting(false);
+          setTerminalPendingUsername(cleanVal);
+          setTerminalState('passphrase');
+          setActiveInputField('my-password');
+          setRegisterError('Passphrase required.');
+        } else {
+          setIsSubmitting(false);
+          setRegisterError('Entity does not exist. Try establishing a new entity.');
+          setShakeTrigger(true);
+          setTimeout(() => setShakeTrigger(false), 500);
+        }
+      }
+    } else {
+      // Register Mode (Establish New Entity ID):
+      // Check if it already exists by attempting login first
+      const checkRes = await viewModel.loginToExistingAccount(cleanVal, '123456');
+      const checkErrorStr = checkRes.error || '';
+      const exists = checkRes.success || checkErrorStr.toLowerCase().includes('sandi') || checkErrorStr.toLowerCase().includes('password') || checkErrorStr.toLowerCase().includes('wrong');
+
+      if (exists) {
+        setIsSubmitting(false);
+        setRegisterError('Entity ID already taken. Use [use existing entity] instead.');
+        setShakeTrigger(true);
+        setTimeout(() => setShakeTrigger(false), 500);
+      } else {
+        // Register new enclave ID
         const regRes = await viewModel.registerMyUsername(cleanVal, '123456');
         setIsSubmitting(false);
         if (regRes.success) {
@@ -602,44 +643,61 @@ export default function SecretMessengerScreen({
                 {/* Step 1: Enclave Identity registration / login */}
                 {sessionAccessVerified && (
                   <div className="space-y-2">
-                    <div>input enclave entity:</div>
                     {viewModel.myUsername ? (
-                      <div className="text-green-400 font-bold ml-4">
-                        &gt; @{viewModel.myUsername} [AUTHENTICATED]
-                      </div>
+                      <>
+                        <div>input enclave entity:</div>
+                        <div className="text-green-400 font-bold ml-4">
+                          &gt; @{viewModel.myUsername} [AUTHENTICATED]
+                        </div>
+                      </>
                     ) : (
-                      <form 
-                        onSubmit={async (e) => {
-                          e.preventDefault();
-                          await handleTerminalSubmit(myUsernameInput);
-                        }}
-                        className="flex items-center space-x-2 ml-4"
-                      >
-                        <span className="animate-pulse">&gt;</span>
-                        <input
-                          id="my-username"
-                          type="text"
-                          inputMode="none"
-                          autoComplete="off"
-                          autoCorrect="off"
-                          autoCapitalize="none"
-                          spellCheck={false}
-                          placeholder="..."
-                          value={myUsernameInput}
-                          onChange={(e) => {
-                            const sanitizedValue = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            setMyUsernameInput(sanitizedValue);
-                            setRegisterError(null);
+                      <>
+                        <div>{isLoginMode ? 'login existing entity:' : 'establish new entity ID:'}</div>
+                        <form 
+                          onSubmit={async (e) => {
+                            e.preventDefault();
+                            await handleTerminalSubmit(myUsernameInput);
                           }}
-                          onFocus={() => {
-                            setActiveInputField('my-username');
-                          }}
-                          autoFocus
-                          disabled={isSubmitting}
-                          className="bg-transparent border-none text-[#22c55e] font-mono focus:outline-none flex-1 text-sm select-all"
-                        />
-                        {isSubmitting && <Loader2 size={12} className="animate-spin text-green-500" />}
-                      </form>
+                          className="flex items-center space-x-2 ml-4"
+                        >
+                          <span className="animate-pulse">&gt;</span>
+                          <input
+                            id="my-username"
+                            type="text"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            placeholder="..."
+                            value={myUsernameInput}
+                            onChange={(e) => {
+                              const sanitizedValue = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                              setMyUsernameInput(sanitizedValue);
+                              setRegisterError(null);
+                            }}
+                            onFocus={() => {
+                              setActiveInputField(null);
+                            }}
+                            autoFocus
+                            disabled={isSubmitting}
+                            className="bg-transparent border-none text-[#22c55e] font-mono focus:outline-none flex-1 text-sm select-all"
+                          />
+                          {isSubmitting && <Loader2 size={12} className="animate-spin text-green-500" />}
+                        </form>
+                        <div className="pl-4 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsLoginMode(!isLoginMode);
+                              setRegisterError(null);
+                              setMyUsernameInput('');
+                            }}
+                            className="text-green-600/60 hover:text-green-400 font-mono text-[10px] uppercase hover:underline cursor-pointer transition-colors"
+                          >
+                            {isLoginMode ? '[establish new entity id]' : '[use existing entity]'}
+                          </button>
+                        </div>
+                      </>
                     )}
                   </div>
                 )}
@@ -659,14 +717,13 @@ export default function SecretMessengerScreen({
                       <input
                         id="my-password"
                         type="password"
-                        inputMode="none"
                         placeholder="..."
                         value={myPasswordInput}
                         onChange={(e) => {
                           setMyPasswordInput(e.target.value);
                           setRegisterError(null);
                         }}
-                        onFocus={() => setActiveInputField('my-password')}
+                        onFocus={() => setActiveInputField(null)}
                         autoFocus
                         disabled={isSubmitting}
                         className="bg-transparent border-none text-amber-400 font-mono focus:outline-none flex-1 text-sm"
@@ -695,7 +752,6 @@ export default function SecretMessengerScreen({
                       <input
                         id="target-username"
                         type="text"
-                        inputMode="none"
                         autoComplete="off"
                         autoCorrect="off"
                         autoCapitalize="none"
@@ -707,7 +763,7 @@ export default function SecretMessengerScreen({
                           setTargetUsernameInput(sanitizedValue);
                           viewModel.clearError();
                         }}
-                        onFocus={() => setActiveInputField('target-username')}
+                        onFocus={() => setActiveInputField(null)}
                         autoFocus
                         className="bg-transparent border-none text-[#22c55e] font-mono focus:outline-none flex-1 text-sm select-all"
                       />
@@ -817,33 +873,55 @@ export default function SecretMessengerScreen({
         <CallOverlay viewModel={callViewModel} myUsername={viewModel.myUsername} />
       )}
 
-      {/* Global Virtual Keyboard Overlay for login/signup/connection inputs */}
-      {activeInputField && !viewModel.activeTargetUser && (
-        <div className="fixed bottom-0 left-0 right-0 z-[100] bg-neutral-950 border-t border-neutral-900/65 flex flex-col pb-[env(safe-area-inset-bottom,8px)] pt-1">
-          <div className="flex justify-between items-center px-4 py-1 text-xs text-neutral-500 font-mono select-none">
-            <span className="uppercase text-[9px] tracking-wider text-neutral-400 flex items-center gap-1.5">
+      {/* Enclave Access Key Numpad Overlay */}
+      {activeInputField === 'terminal-access-key' && !viewModel.activeTargetUser && (
+        <div className="fixed bottom-0 left-0 right-0 z-[100] bg-neutral-950 border-t border-neutral-900/65 flex flex-col pb-[env(safe-area-inset-bottom,8px)] pt-1 select-none">
+          <div className="flex justify-between items-center px-4 py-1 text-xs text-neutral-500 font-mono">
+            <span className="uppercase text-[9px] tracking-wider text-amber-500 flex items-center gap-1.5">
               <KeyboardIcon size={10} />
-              {activeInputField === 'my-username' && 'Ketik Entity Anda'}
-              {activeInputField === 'my-password' && 'Ketik Sandi Anda'}
-              {activeInputField === 'target-username' && 'Ketik Entity Tujuan'}
-              {activeInputField === 'new-password' && 'Buat Sandi Baru'}
+              Ketik Kunci Akses Enclave
             </span>
             <button
               type="button"
               onClick={() => setActiveInputField(null)}
-              className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider px-2 py-1 bg-indigo-950/20 border border-indigo-900/30 rounded-md hover:text-indigo-300 transition cursor-pointer"
+              className="text-[10px] text-amber-500 font-bold uppercase tracking-wider px-2 py-1 bg-amber-950/20 border border-amber-900/30 rounded-md hover:text-amber-400 transition cursor-pointer"
             >
               Selesai
             </button>
           </div>
-          <VirtualKeyboard
-            onKeyPress={handleVirtualKeyPress}
-            onBackspace={handleVirtualBackspace}
-            onSpace={handleVirtualSpace}
-            onEnter={handleVirtualEnter}
-            onClose={() => setActiveInputField(null)}
-            enterLabel={activeInputField === 'my-username' ? 'Lanjut' : 'Kirim'}
-          />
+          <div className="w-full max-w-xs mx-auto grid grid-cols-3 gap-2 p-4">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLEAR', '0', '⌫'].map((key) => {
+              let btnStyle = 'bg-neutral-900 hover:bg-neutral-850 text-neutral-200 border border-neutral-800 shadow-sm';
+
+              if (key === 'CLEAR') {
+                btnStyle = 'text-xs text-red-500 hover:bg-red-950/10 border border-red-950/40 shadow-sm';
+              } else if (key === '⌫') {
+                btnStyle = 'text-amber-500 hover:bg-amber-950/10 border border-amber-950/40 shadow-sm';
+              }
+
+              return (
+                <motion.button
+                  key={key}
+                  whileTap={{ scale: 0.95 }}
+                  type="button"
+                  onClick={() => {
+                    if (key === 'CLEAR') {
+                      setTerminalAccessKeyInput('');
+                    } else if (key === '⌫') {
+                      setTerminalAccessKeyInput(prev => prev.slice(0, -1));
+                    } else {
+                      if (terminalAccessKeyInput.length < appAccessKey.length) {
+                        setTerminalAccessKeyInput(prev => prev + key);
+                      }
+                    }
+                  }}
+                  className={`flex items-center justify-center h-12 rounded-lg text-lg font-mono transition-all cursor-pointer min-h-[44px] ${btnStyle}`}
+                >
+                  {key}
+                </motion.button>
+              );
+            })}
+          </div>
         </div>
       )}
 

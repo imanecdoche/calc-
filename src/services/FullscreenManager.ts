@@ -2,6 +2,7 @@ export class FullscreenManager {
   private static instance: FullscreenManager | null = null;
   private isFullscreenActive: boolean = false;
   private inSecretSession: boolean = false;
+  public disableAutoFullscreen: boolean = false;
 
   public static getInstance(): FullscreenManager {
     if (!FullscreenManager.instance) {
@@ -34,8 +35,13 @@ export class FullscreenManager {
   /**
    * Request Immersive Fullscreen Mode (Web equivalent of Android WindowInsetsControllerCompat)
    */
-  public enterFullscreen() {
+  public enterFullscreen(isManual = false) {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    
+    if (this.disableAutoFullscreen && !isManual) {
+      console.log('Auto fullscreen request blocked because user previously exited fullscreen.');
+      return;
+    }
 
     const docEl = document.documentElement as any;
 

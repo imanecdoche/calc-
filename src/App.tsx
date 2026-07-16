@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wifi, 
@@ -71,10 +71,22 @@ export default function App() {
 
   // --- State for Immersive Fullscreen ---
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [userExitedFullscreen, setUserExitedFullscreen] = useState<boolean>(false);
+  const [appMountedTime] = useState<number>(Date.now());
+  const wasFullscreenRef = useRef(false);
 
   useEffect(() => {
     const handleFSChange = () => {
-      setIsFullscreen(!!(document.fullscreenElement || (document as any).webkitFullscreenElement || FullscreenManager.getInstance().getStatus()));
+      const isCurrentlyFS = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      
+      // If we were previously fullscreen, and now we are not, the user exited fullscreen
+      if (wasFullscreenRef.current && !isCurrentlyFS) {
+        setUserExitedFullscreen(true);
+        FullscreenManager.getInstance().disableAutoFullscreen = true;
+      }
+      
+      wasFullscreenRef.current = isCurrentlyFS;
+      setIsFullscreen(isCurrentlyFS || FullscreenManager.getInstance().getStatus());
     };
 
     document.addEventListener('fullscreenchange', handleFSChange);
@@ -90,6 +102,36 @@ export default function App() {
       clearInterval(interval);
     };
   }, []);
+
+  // Auto-fullscreen only active for 3 seconds after app opens on calculator screen
+  useEffect(() => {
+    if (screen !== 'calculator' || userExitedFullscreen) return;
+
+    const tryFullscreen = () => {
+      const elapsed = Date.now() - appMountedTime;
+      if (elapsed < 3000) {
+        FullscreenManager.getInstance().enterFullscreen();
+      }
+    };
+
+    // Attempt immediately
+    tryFullscreen();
+
+    // Listen to touch/clicks on calculator screen during the first 3 seconds to bypass user-gesture restrictions
+    window.addEventListener('click', tryFullscreen);
+    window.addEventListener('touchstart', tryFullscreen);
+
+    const timer = setTimeout(() => {
+      window.removeEventListener('click', tryFullscreen);
+      window.removeEventListener('touchstart', tryFullscreen);
+    }, 3000);
+
+    return () => {
+      window.removeEventListener('click', tryFullscreen);
+      window.removeEventListener('touchstart', tryFullscreen);
+      clearTimeout(timer);
+    };
+  }, [screen, appMountedTime, userExitedFullscreen]);
 
   // --- State for Device Mockup Frame ---
   const [useBezel, setUseBezel] = useState<boolean>(true);

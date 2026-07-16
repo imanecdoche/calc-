@@ -718,7 +718,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
         </div>
         <div className="flex items-center space-x-3 text-xs">
           <button 
-            onClick={triggerHackingSequence}
+            onClick={() => viewModel.disconnect()}
             className="hover:text-green-300 font-bold hover:underline cursor-pointer transition py-1"
           >
             [back]
