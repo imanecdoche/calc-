@@ -12,4 +12,6 @@ export interface Message {
   deletedForMeUids?: string[];
   audioUrl?: string;
   duration?: number;
+  audioDuration?: number;
+  isEdited?: boolean;
 }

@@ -494,6 +494,30 @@ export function useChatViewModel() {
     }
   }, [activeTargetUser, myUsername]);
 
+  // 10b. Edit message (Firestore level, only within 30 minutes)
+  const editMessage = useCallback(async (msg: Message, newText: string) => {
+    if (!activeTargetUser || !myUsername) return;
+    const conversationId = conversationRepository.generateConversationId(myUsername, activeTargetUser.username);
+
+    // Double check time limit (30 minutes)
+    const thirtyMinutesInMs = 30 * 60 * 1000;
+    if ((Date.now() - msg.timestamp) > thirtyMinutesInMs) {
+      setErrorMsg('Cannot edit message sent more than 30 minutes ago.');
+      return;
+    }
+
+    try {
+      const msgRef = doc(db, 'conversations', conversationId, 'messages', msg.id);
+      await updateDoc(msgRef, {
+        text: newText,
+        isEdited: true
+      });
+    } catch (err) {
+      console.error('Failed to edit message:', err);
+      setErrorMsg('Failed to update message.');
+    }
+  }, [activeTargetUser, myUsername]);
+
   // 11. Pagination triggers: Load more history
   const loadMoreHistory = useCallback(() => {
     if (!activeTargetUser || !myUsername || !hasMoreHistory) return;
@@ -555,7 +579,9 @@ export function useChatViewModel() {
           deletedForEveryone: data.deletedForEveryone,
           deletedForMeUids: data.deletedForMeUids,
           audioUrl: data.audioUrl,
-          duration: data.duration
+          duration: data.duration,
+          audioDuration: data.audioDuration,
+          isEdited: data.isEdited
         };
       });
 
@@ -717,6 +743,7 @@ export function useChatViewModel() {
     handleCopyMessage,
     handleDeleteForMe,
     handleDeleteForEveryone,
+    editMessage,
     loadMoreHistory,
     clearError: () => setErrorMsg(null),
     showManualError: (msg: string) => setErrorMsg(msg)

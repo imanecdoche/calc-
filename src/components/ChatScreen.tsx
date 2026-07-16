@@ -14,7 +14,9 @@ import {
   Pause,
   Loader2,
   Phone,
-  Keyboard as KeyboardIcon
+  Keyboard as KeyboardIcon,
+  ChevronLeft,
+  Pencil
 } from 'lucide-react';
 import { ChatViewModelType } from '../hooks/ChatViewModel';
 import { MessageBubble } from './MessageBubble';
@@ -42,6 +44,8 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [isFooterActive, setIsFooterActive] = useState(false);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [blinkedMessageId, setBlinkedMessageId] = useState<string | null>(null);
 
   const [hackingActive, setHackingActive] = useState(false);
   const [blackoutActive, setBlackoutActive] = useState(false);
@@ -399,6 +403,34 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     };
   }, [draggedX]);
 
+  const showStatusAndTime = (msg: Message, idx: number) => {
+    if (idx === messages.length - 1) return true;
+    const nextMsg = messages[idx + 1];
+    const isSameSender = nextMsg.senderId === msg.senderId;
+    const isTimeClose = Math.abs(nextMsg.timestamp - msg.timestamp) < 2 * 60 * 1000; // 2 minutes threshold
+    return !isSameSender || !isTimeClose;
+  };
+
+  const formatTimeStr = (ts: number) => {
+    const d = new Date(ts);
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+  const handleReplyClick = (replyToId: string) => {
+    const el = document.getElementById(`msg-bubble-${replyToId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setBlinkedMessageId(replyToId);
+      setTimeout(() => {
+        setBlinkedMessageId(null);
+      }, 1500);
+    } else {
+      showSnackbar('Pesan asli tidak ditemukan', 'info');
+    }
+  };
+
   const generateConversationId = (usernameA: string, usernameB: string): string => {
     const list = [usernameA.trim().toLowerCase(), usernameB.trim().toLowerCase()];
     list.sort();
@@ -589,12 +621,19 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     reportTyping();
   };
 
-  const handleSend = (e?: React.FormEvent) => {
+  const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!text.trim()) return;
 
-    sendMessage(text.trim());
-    setText('');
+    if (editingMessage) {
+      await viewModel.editMessage(editingMessage, text.trim());
+      setEditingMessage(null);
+      setText('');
+      showSnackbar('Pesan berhasil diperbarui', 'success');
+    } else {
+      sendMessage(text.trim());
+      setText('');
+    }
 
     // Maintain keyboard focus
     setTimeout(() => {
@@ -684,7 +723,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
   return (
     <div 
-      className="absolute inset-0 bg-[#050505] flex flex-col justify-between overflow-hidden z-20 font-mono text-[#22c55e]"
+      className="absolute inset-0 bg-[#000000] flex flex-col justify-between overflow-hidden z-20 font-sans text-white"
       style={viewportHeight ? { height: `${viewportHeight}px`, bottom: 'auto' } : {}}
     >
       <style dangerouslySetInnerHTML={{ __html: `
@@ -702,115 +741,216 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
           background: transparent;
         }
         .terminal-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(34, 197, 94, 0.2);
+          background: rgba(255, 255, 255, 0.15);
           border-radius: 2px;
+        }
+        @keyframes blink-twice {
+          0%, 100% { opacity: 1; background-color: transparent; }
+          25%, 75% { opacity: 0.3; background-color: rgba(14, 165, 233, 0.4); }
+          50% { opacity: 1; background-color: transparent; }
+        }
+        .animate-blink-twice {
+          animation: blink-twice 0.7s ease-in-out 2;
         }
       ` }} />
       
-      {/* 1. TERMINAL HEADER */}
+      {/* INSTAGRAM DARK MODE HEADER */}
       <div 
         onDoubleClick={triggerHackingSequence}
         title="Double-click to simulate phone shake"
-        className="flex flex-wrap items-center justify-between px-4 py-3 bg-[#020202] border-b border-green-950 text-xs font-mono text-[#22c55e] flex-none select-none"
+        className="flex items-center justify-between px-4 py-3 bg-black border-b border-zinc-900 text-white flex-none select-none h-[60px]"
       >
-        <div className="flex items-center space-x-1">
-          <span>&gt; entity: {activeTargetUser.displayName} [status: {formattedStatus}]</span>
-        </div>
-        <div className="flex items-center space-x-3 text-xs">
+        <div className="flex items-center space-x-3">
+          {/* Back Chevron */}
           <button 
             onClick={() => viewModel.disconnect()}
-            className="hover:text-green-300 font-bold hover:underline cursor-pointer transition py-1"
+            className="text-white hover:opacity-80 transition cursor-pointer p-1 -ml-2"
+            aria-label="Back"
           >
-            [back]
+            <ChevronLeft size={24} />
           </button>
+          
+          {/* Target Profile Initials */}
+          <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-white select-none shadow border border-zinc-850">
+            {activeTargetUser.displayName ? activeTargetUser.displayName.slice(0, 2).toUpperCase() : 'U'}
+          </div>
+
+          {/* User Details */}
+          <div className="text-left flex flex-col">
+            <span className="font-semibold text-sm leading-tight tracking-wide text-zinc-100 flex items-center gap-1">
+              {activeTargetUser.displayName}
+              {targetPresence.isOnline && (
+                <span className="w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse" />
+              )}
+            </span>
+            <span className="text-[10px] text-zinc-400 leading-none mt-0.5">
+              @{activeTargetUser.username} • {targetPresence.isOnline ? 'Aktif sekarang' : 'Offline'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3.5">
+          {/* Phone Call Trigger */}
+          <button 
+            onClick={onStartVoiceCall}
+            className="text-zinc-300 hover:text-white transition cursor-pointer p-1"
+            title="Start voice call"
+          >
+            <Phone size={18} />
+          </button>
+
+          {/* Lock Badges */}
           <button 
             onClick={triggerHackingSequence}
-            className="hover:text-red-400 font-bold hover:underline cursor-pointer transition text-red-500 py-1"
+            className="text-rose-500 hover:text-rose-400 font-semibold text-xs tracking-wide cursor-pointer transition border border-rose-950/40 hover:border-rose-900/60 bg-rose-950/10 px-2.5 py-1.5 rounded-lg flex items-center space-x-1"
+            title="Lock enclave"
           >
-            [lock]
+            <Lock size={12} />
+            <span>Kunci</span>
           </button>
         </div>
-      </div>
-
-      {/* DASHES SEPARATOR BAR */}
-      <div className="text-green-950 px-4 pt-1 text-xs select-none tracking-widest flex-none leading-none">
-        ----------------------------------------------------------------------------------------------------
       </div>
 
       {/* 2. CHAT MESSAGES PANEL */}
       <div 
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-3 terminal-scrollbar relative"
+        className="flex-1 overflow-y-auto px-4 py-3 terminal-scrollbar relative bg-black"
         style={{ overflowX: 'hidden' }}
       >
         
         {/* Pagination Trigger / Load More Header */}
         {hasMoreHistory && (
-          <div className="flex justify-start py-1 text-[10px] text-green-700/60 select-none">
-            [scroll up to load older transaction packets]
-          </div>
+          <button
+            onClick={() => viewModel.loadMoreHistory()}
+            className="w-full text-center py-2 text-[10px] text-zinc-500 hover:text-zinc-300 transition select-none cursor-pointer uppercase tracking-wider font-semibold font-mono"
+          >
+            tampilkan pesan sebelumnya
+          </button>
         )}
 
         {messages.length === 0 && (
-          <div className="py-6 text-green-700/80 text-xs text-left">
-            &gt; channel established. awaiting terminal instructions...
+          <div className="flex flex-col items-center justify-center py-16 text-zinc-500 text-xs text-center select-none space-y-3">
+            <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center text-xl">💬</div>
+            <div className="flex flex-col space-y-1">
+              <div className="font-semibold text-zinc-300">Belum ada pesan</div>
+              <div className="text-[11px] text-zinc-600">Kirim pesan untuk memulai obrolan terenkripsi.</div>
+            </div>
           </div>
         )}
 
-        {/* List render with simple terminal lines */}
-        <div className="space-y-2">
+        {/* List render with Instagram bubbles */}
+        <div className="space-y-1 py-2 flex flex-col">
           {messages.map((msg, index) => {
             const isMe = msg.senderId === viewModel.myUsername;
-            const timeStr = formatTerminalTime(msg.timestamp);
-            const displayPrefix = isMe ? '+' : '-';
-            const statusStr = isMe ? `${getTerminalStatus(msg.status)} ` : '';
             const isVoice = !!msg.audioUrl;
+            const showTime = showStatusAndTime(msg, index);
 
             return (
               <div 
                 key={msg.id || `msg-${index}`} 
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  handleLongPress(e, msg);
-                }}
-                className="text-xs font-mono text-[#22c55e] hover:bg-green-950/10 px-1 py-0.5 rounded transition select-text text-left leading-relaxed break-all flex flex-wrap items-center gap-x-2"
+                id={`msg-bubble-${msg.id}`}
+                className={`flex flex-col w-full mb-1 ${isMe ? 'items-end' : 'items-start'} group`}
               >
-                <span className="text-green-400 font-bold">{displayPrefix}</span>
-                
-                {/* Reply display if present */}
-                {msg.replyToId && !msg.deletedForEveryone && (
-                  <span className="text-green-700 text-[10px] select-none">
-                    [reply: @{msg.replyToSender}]
-                  </span>
-                )}
-
-                {msg.deletedForEveryone ? (
-                  <span className="text-red-900 italic">[message packet purged]</span>
-                ) : isVoice ? (
-                  <span className="text-green-400/80">
-                    [voice note: {msg.audioDuration || 0}s]
-                    <button
-                      onClick={() => {
-                        const player = AudioPlayerManager.getInstance();
-                        if (msg.id === playingVoiceId) {
-                          player.pause();
-                        } else {
-                          player.play(msg.id, msg.audioUrl || '');
-                        }
+                <div 
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    handleLongPress(e, msg);
+                  }}
+                  className={`relative max-w-[72%] flex flex-col transition-all duration-300 ${
+                    blinkedMessageId === msg.id 
+                      ? 'animate-blink-twice rounded-2xl ring-2 ring-sky-500/80 ring-offset-2 ring-offset-black scale-[1.01]' 
+                      : ''
+                  }`}
+                >
+                  {/* Reply Quote box inside the bubble */}
+                  {msg.replyToId && !msg.deletedForEveryone && (
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReplyClick(msg.replyToId!);
                       }}
-                      className="ml-2 text-green-500 font-bold hover:underline cursor-pointer"
+                      className={`mb-[-6px] text-[10px] text-zinc-400 bg-zinc-900/95 px-3 py-2 pb-3 rounded-t-[18px] border-l-2 border-sky-500 cursor-pointer hover:bg-zinc-800 transition max-w-full flex items-center gap-1.5 leading-normal ${
+                        isMe ? 'rounded-tr-[18px]' : 'rounded-tl-[18px]'
+                      }`}
                     >
-                      {msg.id === playingVoiceId ? '[pause]' : '[play]'}
-                    </button>
-                  </span>
-                ) : (
-                  <span>{msg.text}</span>
-                )}
-                
-                <span className="text-green-900 select-none">-&gt;</span>
-                {isMe && !msg.deletedForEveryone && <span className="text-green-400 font-medium">{statusStr}</span>}
-                <span className="text-green-600/80">{timeStr}</span>
+                      <span className="font-semibold text-sky-400">@{msg.replyToSender}</span>
+                      <span className="text-zinc-600">•</span>
+                      <span className="truncate italic flex-1">"{msg.replyToText}"</span>
+                    </div>
+                  )}
+
+                  {/* Main Bubble Body */}
+                  <div 
+                    className={`px-3.5 py-2.5 flex flex-col justify-center rounded-[18px] text-[14px] leading-relaxed text-left ${
+                      msg.replyToId && !msg.deletedForEveryone ? 'rounded-t-none' : ''
+                    } ${
+                      isMe 
+                        ? 'bg-[#3797f0] text-white rounded-br-[4px]' 
+                        : 'bg-[#262626] text-[#efefef] rounded-bl-[4px]'
+                    } ${
+                      msg.deletedForEveryone ? 'bg-[#121212] border border-zinc-900 text-zinc-600 italic rounded-[18px]' : ''
+                    }`}
+                  >
+                    {msg.deletedForEveryone ? (
+                      <span className="flex items-center space-x-1 select-none">
+                        <span>Pesan telah dihapus</span>
+                      </span>
+                    ) : isVoice ? (
+                      <div className="flex items-center space-x-3 py-0.5">
+                        <div className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center text-white select-none">🎙️</div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold">Pesan suara</span>
+                          <span className="text-[10px] text-white/70">{msg.audioDuration || 0} detik</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const player = AudioPlayerManager.getInstance();
+                            if (msg.id === playingVoiceId) {
+                              player.pause();
+                            } else {
+                              player.play(msg.id, msg.audioUrl || '');
+                            }
+                          }}
+                          className="ml-2 px-3 py-1.5 text-xs bg-white/10 hover:bg-white/25 rounded-full font-semibold text-white transition cursor-pointer"
+                        >
+                          {msg.id === playingVoiceId ? 'Pause' : 'Play'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col">
+                        <span className="whitespace-pre-wrap break-words">{msg.text}</span>
+                        {msg.isEdited && (
+                          <span className="text-[9px] text-white/50 block text-right mt-0.5 select-none font-mono">(diedit)</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Time & Status display only on the last group item */}
+                  {showTime && (
+                    <div className={`flex items-center space-x-1.5 px-1 mt-1 text-[10px] text-neutral-500 select-none ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <span>{formatTimeStr(msg.timestamp)}</span>
+                      {isMe && !msg.deletedForEveryone && (
+                        <>
+                          <span>•</span>
+                          <span className="lowercase">
+                            {msg.status === 'sending' 
+                              ? 'mengirim...' 
+                              : msg.status === 'delivered' 
+                                ? 'dilihat' 
+                                : msg.status === 'failed' 
+                                  ? 'gagal' 
+                                  : 'terkirim'}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                </div>
               </div>
             );
           })}
@@ -818,9 +958,9 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
         <div ref={messagesEndRef} />
 
-        {/* Blinking CLI line at bottom of the messages list when not active */}
+        {/* CLI Button for launching keyboard if footer not active */}
         {!isFooterActive && (
-          <div className="mt-4 border-t border-green-950/30 pt-3">
+          <div className="mt-4 border-t border-zinc-900 pt-3">
             <button
               onClick={() => {
                 setIsFooterActive(true);
@@ -829,10 +969,10 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                   scrollToBottom();
                 }, 120);
               }}
-              className="flex items-center text-xs font-mono text-[#22c55e] hover:text-green-400 focus:outline-none cursor-pointer bg-transparent border-none text-left p-1"
+              className="flex items-center text-xs text-zinc-500 hover:text-zinc-300 focus:outline-none cursor-pointer bg-transparent border-none text-left p-1 animate-pulse"
             >
-              <span>&gt; type a command</span>
-              <span className="cursor-blink font-bold ml-1 text-green-400">_</span>
+              <span>&gt; Ketuk untuk mengetik pesan...</span>
+              <span className="cursor-blink font-bold ml-1 text-sky-500">_</span>
             </button>
           </div>
         )}
@@ -847,8 +987,38 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
       {/* 3. INPUT PANEL & ACTIVE REPLY PREVIEW CONTROLS */}
       {isFooterActive && (
-        <div className="bg-[#020202] border-t border-green-950 flex flex-col flex-none pb-[env(safe-area-inset-bottom,8px)] pt-1 select-none">
+        <div className="bg-black border-t border-zinc-900 flex flex-col flex-none pb-[env(safe-area-inset-bottom,8px)] pt-1 select-none">
           
+          {/* EDITING PREVIEW BAR */}
+          <AnimatePresence>
+            {editingMessage && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="bg-[#121212] border-b border-zinc-800 px-4 py-2.5 flex items-center justify-between text-xs text-neutral-300"
+              >
+                <div className="flex items-center space-x-2 text-left font-sans">
+                  <Pencil size={12} className="text-sky-400" />
+                  <span className="font-semibold text-sky-400">Edit pesan:</span>
+                  <span className="truncate max-w-[200px] text-neutral-400 italic">
+                    "{editingMessage.text}"
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingMessage(null);
+                    setText('');
+                  }}
+                  className="text-neutral-500 hover:text-white transition font-semibold"
+                >
+                  batal
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* REPLY PREVIEW BAR */}
           <AnimatePresence>
             {replyingTo && (
@@ -856,20 +1026,22 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="bg-[#050505] border-b border-green-950 px-4 py-1.5 flex items-center justify-between text-[11px]"
+                className="bg-[#121212] border-b border-zinc-800 px-4 py-2 flex items-center justify-between text-xs text-neutral-300"
               >
-                <div className="flex items-center space-x-2 text-left text-green-600 font-mono">
-                  <span>[&gt; reply: @{replyingTo.senderId}]</span>
-                  <span className="truncate max-w-[200px] text-green-700 italic">
+                <div className="flex items-center space-x-2 text-left font-sans">
+                  <CornerUpRight size={12} className="text-sky-400" />
+                  <span className="font-semibold text-sky-400">Balas @{replyingTo.senderId}:</span>
+                  <span className="truncate max-w-[200px] text-neutral-400 italic">
                     "{replyingTo.text}"
                   </span>
                 </div>
                 <button
+                  type="button"
                   onClick={handleCancelReply}
-                  className="hover:text-red-400 transition font-bold text-red-500"
+                  className="text-neutral-500 hover:text-white transition font-semibold"
                   aria-label="Cancel reply"
                 >
-                  [cancel]
+                  batal
                 </button>
               </motion.div>
             )}
@@ -877,63 +1049,63 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
           {isRecording ? (
             /* Active Recording Stage Overlay */
-            <div className="h-12 px-4 flex items-center justify-between bg-[#020202] text-xs font-mono text-red-500 relative overflow-hidden border-t border-green-950">
+            <div className="h-12 px-4 flex items-center justify-between bg-[#121212] text-xs text-red-500 relative overflow-hidden border-t border-zinc-800 font-sans">
               <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-red-600 rounded-full cursor-blink" />
-                <span>REC: {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}</span>
+                <div className="w-2.5 h-2.5 bg-red-600 rounded-full cursor-blink animate-pulse" />
+                <span className="font-semibold">Merekam: {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}</span>
               </div>
 
               {/* Slide to Cancel slider and text */}
               <div 
-                className="flex items-center space-x-1 text-[11px] select-none transition-all duration-100 text-green-700"
+                className="flex items-center space-x-1 text-[11px] select-none transition-all duration-100 text-zinc-500"
                 style={{
                   transform: `translateX(${Math.max(-100, Math.min(0, draggedX))}px)`,
                   opacity: draggedX < -80 ? 0.6 : 1,
                 }}
               >
-                <span className={draggedX < -80 ? 'text-red-400 font-semibold' : ''}>
-                  {draggedX < -80 ? '[release to clear]' : '← [slide left to abort]'}
+                <span className={draggedX < -80 ? 'text-red-400 font-bold' : ''}>
+                  {draggedX < -80 ? 'Lepas untuk hapus' : '← Geser kiri untuk membatalkan'}
                 </span>
               </div>
             </div>
           ) : recordedBlob ? (
             /* Preview Stage Overlay */
-            <div className="h-12 px-4 flex items-center justify-between bg-[#020202] text-xs font-mono border-t border-green-950 text-[#22c55e]">
+            <div className="h-12 px-4 flex items-center justify-between bg-[#121212] text-xs border-t border-zinc-800 text-zinc-100 font-sans">
               <div className="flex items-center space-x-3 flex-1">
                 <button
                   type="button"
                   onClick={handleTogglePreviewPlay}
-                  className="font-bold hover:underline hover:text-green-300"
+                  className="font-bold hover:text-zinc-300 cursor-pointer"
                   aria-label={isPreviewPlaying ? 'Pause preview' : 'Play preview'}
                 >
-                  [{isPreviewPlaying ? 'pause' : 'play-preview'}]
+                  [{isPreviewPlaying ? 'Pause' : 'Putar rekaman'}]
                 </button>
 
-                <span className="text-[10px] text-green-600">
+                <span className="text-[10px] text-zinc-400">
                   {Math.floor(previewProgress / 60)}:{(Math.floor(previewProgress) % 60).toString().padStart(2, '0')}
                   {' / '}
                   {Math.floor(recordedDuration / 60)}:{(recordedDuration % 60).toString().padStart(2, '0')}
                 </span>
               </div>
 
-              <div className="flex items-center space-x-3 ml-3 font-bold">
+              <div className="flex items-center space-x-3 ml-3 font-bold text-xs">
                 <button
                   type="button"
                   onClick={handleDiscardVoiceNote}
-                  className="text-red-500 hover:text-red-400 hover:underline"
+                  className="text-red-500 hover:text-red-400 cursor-pointer"
                   aria-label="Discard recording"
                 >
-                  [discard]
+                  Buang
                 </button>
 
                 <button
                   type="button"
                   disabled={isUploading}
                   onClick={handleSendVoiceNote}
-                  className="text-green-400 hover:text-green-300 hover:underline disabled:text-green-900"
+                  className="text-sky-400 hover:text-sky-300 disabled:text-zinc-600 cursor-pointer"
                   aria-label="Send voice note"
                 >
-                  {isUploading ? '[uploading...]' : '[transmit]'}
+                  {isUploading ? 'Mengunggah...' : 'Kirim'}
                 </button>
               </div>
             </div>
@@ -941,51 +1113,54 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
             /* Default Text Input and Microphone form */
             <form 
               onSubmit={handleSend}
-              className="h-12 px-4 flex items-center space-x-2 text-xs font-mono"
+              className="h-14 px-4 flex items-center space-x-3 text-sm bg-black border-t border-zinc-900 font-sans"
             >
-              <span className="text-green-400 font-bold select-none">&gt;</span>
-              <input
-                ref={inputRef}
-                type="text"
-                inputMode={settings.keyboardType === 'custom' ? 'none' : 'text'}
-                autoComplete="off"
-                placeholder="type message..."
-                value={text}
-                onChange={handleInputChange}
-                onFocus={() => {
-                  if (settings.keyboardType === 'custom') {
-                    setIsKeyboardOpen(true);
-                  }
-                  setTimeout(() => {
-                    scrollToBottom();
-                  }, 150);
-                }}
-                className="flex-1 bg-transparent border-none text-[#22c55e] placeholder-green-900 text-xs focus:outline-none focus:ring-0 font-mono py-1"
-              />
+              <div className="flex-1 bg-zinc-900 border border-zinc-800/85 rounded-full px-4 py-2 flex items-center space-x-2.5">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  inputMode={settings.keyboardType === 'custom' ? 'none' : 'text'}
+                  autoComplete="off"
+                  placeholder={editingMessage ? "Ubah pesan..." : "Kirim pesan..."}
+                  value={text}
+                  onChange={handleInputChange}
+                  onFocus={() => {
+                    if (settings.keyboardType === 'custom') {
+                      setIsKeyboardOpen(true);
+                    }
+                    setTimeout(() => {
+                      scrollToBottom();
+                    }, 150);
+                  }}
+                  className="flex-1 bg-transparent border-none text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-0 py-1"
+                />
+
+                {!text.trim() && (
+                  /* Microphone button for voice notes (holding triggers voice recorder) */
+                  <button
+                    type="button"
+                    onMouseDown={handleMicPressStart}
+                    onTouchStart={handleMicPressStart}
+                    title="Tahan untuk merekam"
+                    aria-label="Tahan untuk merekam"
+                    className="hover:text-white text-zinc-400 cursor-pointer transition select-none touch-none animate-pulse"
+                  >
+                    <Mic size={18} />
+                  </button>
+                )}
+              </div>
 
               {text.trim() ? (
                 /* Standard Send button */
                 <button
                   type="submit"
-                  title="Send message packet"
-                  aria-label="Send message packet"
-                  className="hover:text-green-300 font-bold hover:underline cursor-pointer py-1 px-2"
+                  title="Kirim pesan"
+                  aria-label="Kirim pesan"
+                  className="text-sky-500 font-bold hover:text-sky-400 cursor-pointer transition text-sm px-2 py-1 select-none"
                 >
-                  [send]
+                  Kirim
                 </button>
-              ) : (
-                /* Microphone button for voice notes (holding triggers voice recorder) */
-                <button
-                  type="button"
-                  onMouseDown={handleMicPressStart}
-                  onTouchStart={handleMicPressStart}
-                  title="Hold to record voice note"
-                  aria-label="Hold to record voice note"
-                  className="hover:text-green-300 font-bold hover:underline cursor-pointer py-1 px-2 select-none touch-none text-green-700"
-                >
-                  [rec]
-                </button>
-              )}
+              ) : null}
 
               {settings.keyboardType === 'custom' && (
                 <button
@@ -993,16 +1168,17 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                   onClick={() => {
                     setIsKeyboardOpen(!isKeyboardOpen);
                   }}
-                  className="hover:text-green-300 font-bold hover:underline cursor-pointer py-1 px-2"
+                  className="text-zinc-400 hover:text-zinc-200 cursor-pointer transition p-1"
+                  title="Keyboard"
                 >
-                  [{isKeyboardOpen ? 'hide-kb' : 'show-kb'}]
+                  <KeyboardIcon size={18} />
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={triggerHackingSequence}
-                className="hover:text-red-400 font-bold hover:underline cursor-pointer py-1 px-2 text-red-500"
+                className="text-zinc-500 hover:text-red-400 cursor-pointer transition text-xs font-semibold px-1 py-1"
               >
                 [exit]
               </button>
@@ -1011,7 +1187,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
           {/* Custom Native-App-style Virtual Keyboard */}
           {settings.keyboardType === 'custom' && isKeyboardOpen && !isRecording && !recordedBlob && (
-            <div className="w-full bg-[#020202] border-t border-green-950">
+            <div className="w-full bg-black border-t border-zinc-900">
               <VirtualKeyboard
                 onKeyPress={insertText}
                 onBackspace={handleBackspace}
@@ -1035,10 +1211,10 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
             exit={{ opacity: 0, y: 15 }}
             className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
           >
-            <div className={`px-4 py-2 rounded border text-xs font-mono shadow-2xl flex items-center space-x-2 ${
+            <div className={`px-4 py-2 rounded-xl text-xs font-sans shadow-2xl flex items-center space-x-2 border ${
               snackbar.type === 'error'
-                ? 'bg-red-950 border-red-900 text-red-400'
-                : 'bg-green-950 border-green-900 text-green-400'
+                ? 'bg-rose-950 border-rose-900 text-rose-300'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-100'
             }`}>
               <span>{snackbar.text}</span>
             </div>
@@ -1056,6 +1232,14 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
         onCopy={handleCopy}
         onDeleteForMe={handleDeleteMe}
         onDeleteForEveryone={handleDeleteEveryone}
+        onEdit={(msg) => {
+          setEditingMessage(msg);
+          setText(msg.text);
+          setIsFooterActive(true);
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 100);
+        }}
       />
 
     </div>

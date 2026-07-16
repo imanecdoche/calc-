@@ -9,7 +9,8 @@ import {
   X,
   Clock,
   User,
-  CheckCircle2
+  CheckCircle2,
+  Pencil
 } from 'lucide-react';
 import { Message } from '../models/Message';
 
@@ -22,6 +23,7 @@ interface MessageActionSheetProps {
   onCopy: (message: Message) => void;
   onDeleteForMe: (message: Message) => void;
   onDeleteForEveryone: (message: Message) => void;
+  onEdit?: (message: Message) => void;
 }
 
 export function MessageActionSheet({
@@ -32,7 +34,8 @@ export function MessageActionSheet({
   onReply,
   onCopy,
   onDeleteForMe,
-  onDeleteForEveryone
+  onDeleteForEveryone,
+  onEdit
 }: MessageActionSheetProps) {
   
   // Close sheet on escape key
@@ -50,6 +53,13 @@ export function MessageActionSheet({
 
   const isMe = message.senderId === myUsername;
   const isDeleted = message.deletedForEveryone;
+
+  // Determine if "Edit" is available (max 30 minutes after sent, and must be sent by current user)
+  const isEditAvailable = () => {
+    if (!isMe || isDeleted || message.audioUrl) return false;
+    const thirtyMinutesInMs = 30 * 60 * 1000;
+    return (Date.now() - message.timestamp) < thirtyMinutesInMs;
+  };
 
   // Determine if "Delete for Everyone" is available (max 5 minutes after sent, and must be sent by current user)
   const isDeleteForEveryoneAvailable = () => {
@@ -141,6 +151,20 @@ export function MessageActionSheet({
                 >
                   <Copy size={16} className="text-indigo-400" />
                   <span className="text-xs font-medium tracking-wide">Copy Text</span>
+                </button>
+              )}
+
+              {/* EDIT MESSAGE (max 30 mins) */}
+              {isEditAvailable() && onEdit && (
+                <button
+                  onClick={() => {
+                    onEdit(message);
+                    onClose();
+                  }}
+                  className="w-full h-12 px-4 rounded-xl hover:bg-neutral-900 text-neutral-300 hover:text-white flex items-center space-x-3.5 transition text-left cursor-pointer"
+                >
+                  <Pencil size={16} className="text-indigo-400" />
+                  <span className="text-xs font-medium tracking-wide">Edit Message</span>
                 </button>
               )}
 
