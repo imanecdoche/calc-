@@ -103,35 +103,6 @@ export default function App() {
     };
   }, []);
 
-  // Auto-fullscreen only active for 3 seconds after app opens on calculator screen
-  useEffect(() => {
-    if (screen !== 'calculator' || userExitedFullscreen) return;
-
-    const tryFullscreen = () => {
-      const elapsed = Date.now() - appMountedTime;
-      if (elapsed < 3000) {
-        FullscreenManager.getInstance().enterFullscreen();
-      }
-    };
-
-    // Attempt immediately
-    tryFullscreen();
-
-    // Listen to touch/clicks on calculator screen during the first 3 seconds to bypass user-gesture restrictions
-    window.addEventListener('click', tryFullscreen);
-    window.addEventListener('touchstart', tryFullscreen);
-
-    const timer = setTimeout(() => {
-      window.removeEventListener('click', tryFullscreen);
-      window.removeEventListener('touchstart', tryFullscreen);
-    }, 3000);
-
-    return () => {
-      window.removeEventListener('click', tryFullscreen);
-      window.removeEventListener('touchstart', tryFullscreen);
-      clearTimeout(timer);
-    };
-  }, [screen, appMountedTime, userExitedFullscreen]);
 
   // --- State for Device Mockup Frame ---
   const [useBezel, setUseBezel] = useState<boolean>(true);

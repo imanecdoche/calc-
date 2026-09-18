@@ -2,7 +2,7 @@ export class FullscreenManager {
   private static instance: FullscreenManager | null = null;
   private isFullscreenActive: boolean = false;
   private inSecretSession: boolean = false;
-  public disableAutoFullscreen: boolean = false;
+  public disableAutoFullscreen: boolean = true;
 
   public static getInstance(): FullscreenManager {
     if (!FullscreenManager.instance) {
@@ -12,12 +12,7 @@ export class FullscreenManager {
   }
 
   private constructor() {
-    if (typeof window !== 'undefined') {
-      // Re-apply fullscreen when coming back from background (focus or visibility change)
-      window.addEventListener('focus', this.handleResume);
-      document.addEventListener('visibilitychange', this.handleResume);
-      window.addEventListener('resize', this.handleResize);
-    }
+    // Auto-fullscreen listeners disabled
   }
 
   /**
@@ -25,21 +20,16 @@ export class FullscreenManager {
    */
   public setSecretSessionActive(active: boolean) {
     this.inSecretSession = active;
-    if (active) {
-      this.enterFullscreen();
-    } else {
-      this.exitFullscreen();
-    }
   }
 
   /**
-   * Request Immersive Fullscreen Mode (Web equivalent of Android WindowInsetsControllerCompat)
+   * Request Immersive Fullscreen Mode (Only if triggered manually)
    */
   public enterFullscreen(isManual = false) {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
     
-    if (this.disableAutoFullscreen && !isManual) {
-      console.log('Auto fullscreen request blocked because user previously exited fullscreen.');
+    // Auto-fullscreen completely disabled
+    if (!isManual) {
       return;
     }
 
@@ -93,19 +83,4 @@ export class FullscreenManager {
     if (typeof document === 'undefined') return false;
     return !!(document.fullscreenElement || (document as any).webkitFullscreenElement || this.isFullscreenActive);
   }
-
-  private handleResume = () => {
-    // If app resumes and we are in a secret session, re-enforce immersive fullscreen
-    if (this.inSecretSession) {
-      this.enterFullscreen();
-    }
-  };
-
-  private handleResize = () => {
-    // Lifecycle check
-    if (this.inSecretSession && !this.getStatus()) {
-      // Attempt to re-enter if exited unexpectedly during resize/orientation changes
-      this.enterFullscreen();
-    }
-  };
 }
