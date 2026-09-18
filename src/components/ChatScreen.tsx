@@ -42,140 +42,9 @@ interface ChatScreenProps {
 export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLock, onExitToCalculator }: ChatScreenProps) {
   const [text, setText] = useState('');
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const [isFooterActive, setIsFooterActive] = useState(false);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [blinkedMessageId, setBlinkedMessageId] = useState<string | null>(null);
-
-  const [hackingActive, setHackingActive] = useState(false);
-  const [blackoutActive, setBlackoutActive] = useState(false);
-  const [hackingLogs, setHackingLogs] = useState<string[]>([]);
-  const [hackingProgress, setHackingProgress] = useState(0);
-
-  const triggerHackingSequence = useCallback(() => {
-    if (hackingActive || blackoutActive) return;
-    setHackingActive(true);
-    setHackingLogs([
-      "[SYS] INTENT DETECTED: FORCED ENCLAVE PURGE PROTOCOL DOSP V9.4...",
-      "[SYS] INTENT SOURCE: SYSTEM SHAKE OR SECURITY DISMISSAL."
-    ]);
-    setHackingProgress(0);
-
-    const startTime = Date.now();
-    const duration = 6000; // 6 seconds
-    const intervalTime = 120; // 120ms each line tick
-
-    const hexChars = "0123456789ABCDEF";
-    const getRandomHexLine = () => {
-      let hexPart = "";
-      for (let i = 0; i < 8; i++) {
-        hexPart += hexChars[Math.floor(Math.random() * 16)] + hexChars[Math.floor(Math.random() * 16)] + " ";
-      }
-      return `0x${Math.floor(Math.random() * 0xFFFFFF).toString(16).toUpperCase().padStart(6, '0')}: ${hexPart.trim()}  .....[WIPE_PENDING]`;
-    };
-
-    const logsList = [
-      `[SYS] LOCATING ACTIVE MEMORY CHANNELS FOR USER: @${viewModel.myUsername || 'anonymous'}...`,
-      "[MEM] SHREDDING ACTIVE CHAT PACKETS [AES-256-GCM KEY]",
-      "[NET] CLOSING MULTICAST ENCRYPTED WEB-SOCKETS",
-      "[SYS] DESTROYING LOCAL STORAGE AUTH CACHE",
-      "[DISK] FILLING STORAGE BLOCKS WITH SECURE ZERO-BYTES",
-      "[SYS] INJECTING DECOY ARTIFACTS...",
-      "[AUTH] ANNIHILATING IDENTITIES",
-      "[STACK] MEMORY COLD DUMP INITIATED",
-      "[SYS] REWRITING ENCLAVE SECTORS",
-      "[NET] PEER CONTEXT FLUSHED SUCCESSFULLY",
-      "[SUCCESS] MEMORY WIPED TOTAL.",
-      "[SYS] DISGUISING INTERFACE TO DECIME CALCULATOR..."
-    ];
-
-    let logIndex = 0;
-
-    const timer = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(100, Math.floor((elapsed / duration) * 100));
-      setHackingProgress(progress);
-
-      setHackingLogs((prev) => {
-        const nextLogs = [...prev];
-        if (Math.random() < 0.4 && logIndex < logsList.length) {
-          nextLogs.push(logsList[logIndex]);
-          logIndex++;
-        } else {
-          nextLogs.push(getRandomHexLine());
-        }
-        if (nextLogs.length > 35) {
-          nextLogs.shift();
-        }
-        return nextLogs;
-      });
-
-      if (elapsed >= duration) {
-        clearInterval(timer);
-        setHackingActive(false);
-        setBlackoutActive(true);
-
-        setTimeout(() => {
-          setBlackoutActive(false);
-          viewModel.disconnect();
-          onExitToCalculator();
-        }, 2000);
-      }
-    }, intervalTime);
-  }, [hackingActive, blackoutActive, viewModel.myUsername, viewModel.disconnect, onExitToCalculator]);
-
-  // Hook up shake, visibility change, and Alt+S keypress
-  useEffect(() => {
-    let lastX: number | null = null;
-    let lastY: number | null = null;
-    let lastZ: number | null = null;
-    const threshold = 18; // shake sensitivity
-
-    const handleMotion = (event: DeviceMotionEvent) => {
-      const accel = event.accelerationIncludingGravity;
-      if (!accel) return;
-      const { x, y, z } = accel;
-      if (x === null || y === null || z === null) return;
-
-      if (lastX !== null && lastY !== null && lastZ !== null) {
-        const deltaX = Math.abs(x - lastX);
-        const deltaY = Math.abs(y - lastY);
-        const deltaZ = Math.abs(z - lastZ);
-
-        if ((deltaX > threshold && deltaY > threshold) || 
-            (deltaX > threshold && deltaZ > threshold) || 
-            (deltaY > threshold && deltaZ > threshold)) {
-          triggerHackingSequence();
-        }
-      }
-
-      lastX = x;
-      lastY = y;
-      lastZ = z;
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.altKey && (event.key === 's' || event.key === 'S' || event.key === 'h' || event.key === 'H')) {
-        triggerHackingSequence();
-      }
-    };
-
-    const handleVisibility = () => {
-      if (document.hidden) {
-        triggerHackingSequence();
-      }
-    };
-
-    window.addEventListener('devicemotion', handleMotion);
-    window.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      window.removeEventListener('devicemotion', handleMotion);
-      window.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, [triggerHackingSequence]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -329,7 +198,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     // Request permissions dynamically
     const hasPermission = await recorderManager.requestPermission();
     if (!hasPermission) {
-      showSnackbar('Izin mikrofon ditolak. Aktifkan di pengaturan browser Anda.', 'error');
+      showSnackbar('Microphone permission denied. Please allow microphone access in your browser.', 'error');
       return;
     }
 
@@ -353,7 +222,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       console.error(err);
       setIsRecording(false);
       isRecordingRef.current = false;
-      showSnackbar('Gagal memulai perekaman.', 'error');
+      showSnackbar('Failed to start recording.', 'error');
     }
   };
 
@@ -366,7 +235,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     if (isCancel) {
       recorderManager.cancelRecording();
       setDraggedX(0);
-      showSnackbar('Rekaman dibatalkan', 'info');
+      showSnackbar('Recording cancelled.', 'info');
     } else {
       const result = await recorderManager.stopRecording();
       if (result) {
@@ -427,7 +296,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
         setBlinkedMessageId(null);
       }, 1500);
     } else {
-      showSnackbar('Pesan asli tidak ditemukan', 'info');
+      showSnackbar('Original message not found.', 'info');
     }
   };
 
@@ -466,10 +335,10 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       setRecordedBlob(null);
       setRecordedDuration(0);
       handleCancelReply();
-      showSnackbar('Voice note dikirim', 'success');
+      showSnackbar('Voice message sent.', 'success');
     } catch (err: any) {
       console.error(err);
-      showSnackbar(err.message || 'Gagal mengirim voice note.', 'error');
+      showSnackbar(err.message || 'Failed to send voice message.', 'error');
     } finally {
       setIsUploading(false);
     }
@@ -629,7 +498,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       await viewModel.editMessage(editingMessage, text.trim());
       setEditingMessage(null);
       setText('');
-      showSnackbar('Pesan berhasil diperbarui', 'success');
+      showSnackbar('Message updated.', 'success');
     } else {
       sendMessage(text.trim());
       setText('');
@@ -667,58 +536,6 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     showSnackbar('This message was deleted.', 'success');
   };
 
-  const formatTerminalTime = (ts: number) => {
-    const d = new Date(ts);
-    const h = d.getHours().toString().padStart(2, '0');
-    const m = d.getMinutes().toString().padStart(2, '0');
-    const s = d.getSeconds().toString().padStart(2, '0');
-    return `${h}:${m}.${s}`;
-  };
-
-  const getTerminalStatus = (status?: string) => {
-    if (status === 'sending') return '[attempting]';
-    if (status === 'delivered') return '[approved]';
-    if (status === 'failed') return '[access denied]';
-    return '[deployed]';
-  };
-
-  if (blackoutActive) {
-    return (
-      <div className="absolute inset-0 bg-[#000000] z-50 flex items-center justify-center font-mono select-none animate-fade-in" />
-    );
-  }
-
-  if (hackingActive) {
-    return (
-      <div className="absolute inset-0 bg-[#020202] text-[#22c55e] font-mono p-6 flex flex-col justify-between overflow-hidden z-50 animate-fade-in select-none">
-        <div className="flex-1 overflow-y-auto terminal-scrollbar space-y-2 select-none text-left">
-          <div className="text-red-500 font-bold mb-4 animate-pulse">
-            *** SECURITY ALERT: FORCED ENCLAVE PURGE INSTIGATED ***
-          </div>
-          
-          {hackingLogs.map((log, idx) => (
-            <div key={idx} className="text-xs leading-relaxed break-all">
-              &gt; {log}
-            </div>
-          ))}
-          
-          <div className="pt-4 text-xs font-bold flex items-center space-x-2">
-            <span>ERASING MEMORY SEGMENTS:</span>
-            <span className="text-green-400 font-mono tracking-widest">[</span>
-            <span className="text-yellow-500 font-bold">
-              {"█".repeat(Math.floor(hackingProgress / 5)).padEnd(20, "░")}
-            </span>
-            <span className="text-green-400 font-mono tracking-widest">]</span>
-            <span className="text-green-400 font-bold">{hackingProgress}%</span>
-          </div>
-        </div>
-        <div className="text-[10px] text-green-800 border-t border-green-950 pt-3 select-none text-center">
-          SYSTEM SHREDDER DOSP v9.4 // SELF-DESTRUCT PRESET ENABLED
-        </div>
-      </div>
-    );
-  }
-
   if (!activeTargetUser) return null;
 
   return (
@@ -754,10 +571,8 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
         }
       ` }} />
       
-      {/* INSTAGRAM DARK MODE HEADER */}
+      {/* HEADER */}
       <div 
-        onDoubleClick={triggerHackingSequence}
-        title="Double-click to simulate phone shake"
         className="flex items-center justify-between px-4 py-3 bg-black border-b border-zinc-900 text-white flex-none select-none h-[60px]"
       >
         <div className="flex items-center space-x-3">
@@ -784,29 +599,34 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
               )}
             </span>
             <span className="text-[10px] text-zinc-400 leading-none mt-0.5">
-              @{activeTargetUser.username} • {targetPresence.isOnline ? 'Aktif sekarang' : 'Offline'}
+              @{activeTargetUser.username} • {targetPresence.isOnline ? 'Active now' : 'Offline'}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center space-x-3.5">
+        <div className="flex items-center space-x-1.5">
           {/* Phone Call Trigger */}
           <button 
             onClick={onStartVoiceCall}
-            className="text-zinc-300 hover:text-white transition cursor-pointer p-1"
+            className="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-900 transition cursor-pointer"
             title="Start voice call"
+            aria-label="Start voice call"
           >
             <Phone size={18} />
           </button>
 
-          {/* Lock Badges */}
+          {/* Lock Button */}
           <button 
-            onClick={triggerHackingSequence}
-            className="text-rose-500 hover:text-rose-400 font-semibold text-xs tracking-wide cursor-pointer transition border border-rose-950/40 hover:border-rose-900/60 bg-rose-950/10 px-2.5 py-1.5 rounded-lg flex items-center space-x-1"
-            title="Lock enclave"
+            onClick={() => {
+              viewModel.disconnect();
+              onLock();
+            }}
+            className="px-2.5 py-1.5 rounded-xl text-neutral-400 hover:text-rose-400 hover:bg-neutral-900 transition flex items-center gap-1.5 cursor-pointer text-xs font-medium"
+            title="Lock chat"
+            aria-label="Lock chat"
           >
-            <Lock size={12} />
-            <span>Kunci</span>
+            <Lock size={14} />
+            <span>Lock</span>
           </button>
         </div>
       </div>
@@ -825,21 +645,21 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
             onClick={() => viewModel.loadMoreHistory()}
             className="w-full text-center py-2 text-[10px] text-zinc-500 hover:text-zinc-300 transition select-none cursor-pointer uppercase tracking-wider font-semibold font-mono"
           >
-            tampilkan pesan sebelumnya
+            Load older messages
           </button>
         )}
 
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-zinc-500 text-xs text-center select-none space-y-3">
-            <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center text-xl">💬</div>
+            <div className="w-14 h-14 rounded-full bg-zinc-900 flex items-center justify-center text-xl">💬</div>
             <div className="flex flex-col space-y-1">
-              <div className="font-semibold text-zinc-300">Belum ada pesan</div>
-              <div className="text-[11px] text-zinc-600">Kirim pesan untuk memulai obrolan terenkripsi.</div>
+              <div className="font-semibold text-zinc-300">No messages yet</div>
+              <div className="text-[11px] text-zinc-600">Send a message to start the conversation.</div>
             </div>
           </div>
         )}
 
-        {/* List render with Instagram bubbles */}
+        {/* List render with chat bubbles */}
         <div className="space-y-1 py-2 flex flex-col">
           {messages.map((msg, index) => {
             const isMe = msg.senderId === viewModel.myUsername;
@@ -894,14 +714,14 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                   >
                     {msg.deletedForEveryone ? (
                       <span className="flex items-center space-x-1 select-none">
-                        <span>Pesan telah dihapus</span>
+                        <span>This message was deleted</span>
                       </span>
                     ) : isVoice ? (
                       <div className="flex items-center space-x-3 py-0.5">
                         <div className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center text-white select-none">🎙️</div>
                         <div className="flex flex-col">
-                          <span className="text-xs font-semibold">Pesan suara</span>
-                          <span className="text-[10px] text-white/70">{msg.audioDuration || 0} detik</span>
+                          <span className="text-xs font-semibold">Voice message</span>
+                          <span className="text-[10px] text-white/70">{msg.audioDuration || 0}s</span>
                         </div>
                         <button
                           type="button"
@@ -923,7 +743,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                       <div className="flex flex-col">
                         <span className="whitespace-pre-wrap break-words">{msg.text}</span>
                         {msg.isEdited && (
-                          <span className="text-[9px] text-white/50 block text-right mt-0.5 select-none font-mono">(diedit)</span>
+                          <span className="text-[9px] text-white/50 block text-right mt-0.5 select-none font-mono">(edited)</span>
                         )}
                       </div>
                     )}
@@ -938,12 +758,12 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                           <span>•</span>
                           <span className="lowercase">
                             {msg.status === 'sending' 
-                              ? 'mengirim...' 
+                              ? 'sending...' 
                               : msg.status === 'delivered' 
-                                ? 'dilihat' 
+                                ? 'seen' 
                                 : msg.status === 'failed' 
-                                  ? 'gagal' 
-                                  : 'terkirim'}
+                                  ? 'failed' 
+                                  : 'sent'}
                           </span>
                         </>
                       )}
@@ -957,250 +777,222 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
         </div>
 
         <div ref={messagesEndRef} />
-
-        {/* CLI Button for launching keyboard if footer not active */}
-        {!isFooterActive && (
-          <div className="mt-4 border-t border-zinc-900 pt-3">
-            <button
-              onClick={() => {
-                setIsFooterActive(true);
-                setTimeout(() => {
-                  inputRef.current?.focus();
-                  scrollToBottom();
-                }, 120);
-              }}
-              className="flex items-center text-xs text-zinc-500 hover:text-zinc-300 focus:outline-none cursor-pointer bg-transparent border-none text-left p-1 animate-pulse"
-            >
-              <span>&gt; Ketuk untuk mengetik pesan...</span>
-              <span className="cursor-blink font-bold ml-1 text-sky-500">_</span>
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* FLOATING SCROLL CONTROLLER BADGE */}
+      {/* FLOATING SCROLL CONTROLLER */}
       <ScrollController
         containerRef={containerRef}
         messagesCount={messages.length}
         onScrollToBottom={scrollToBottom}
       />
 
-      {/* 3. INPUT PANEL & ACTIVE REPLY PREVIEW CONTROLS */}
-      {isFooterActive && (
-        <div className="bg-black border-t border-zinc-900 flex flex-col flex-none pb-[env(safe-area-inset-bottom,8px)] pt-1 select-none">
-          
-          {/* EDITING PREVIEW BAR */}
-          <AnimatePresence>
-            {editingMessage && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="bg-[#121212] border-b border-zinc-800 px-4 py-2.5 flex items-center justify-between text-xs text-neutral-300"
-              >
-                <div className="flex items-center space-x-2 text-left font-sans">
-                  <Pencil size={12} className="text-sky-400" />
-                  <span className="font-semibold text-sky-400">Edit pesan:</span>
-                  <span className="truncate max-w-[200px] text-neutral-400 italic">
-                    "{editingMessage.text}"
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingMessage(null);
-                    setText('');
-                  }}
-                  className="text-neutral-500 hover:text-white transition font-semibold"
-                >
-                  batal
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* REPLY PREVIEW BAR */}
-          <AnimatePresence>
-            {replyingTo && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="bg-[#121212] border-b border-zinc-800 px-4 py-2 flex items-center justify-between text-xs text-neutral-300"
-              >
-                <div className="flex items-center space-x-2 text-left font-sans">
-                  <CornerUpRight size={12} className="text-sky-400" />
-                  <span className="font-semibold text-sky-400">Balas @{replyingTo.senderId}:</span>
-                  <span className="truncate max-w-[200px] text-neutral-400 italic">
-                    "{replyingTo.text}"
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCancelReply}
-                  className="text-neutral-500 hover:text-white transition font-semibold"
-                  aria-label="Cancel reply"
-                >
-                  batal
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {isRecording ? (
-            /* Active Recording Stage Overlay */
-            <div className="h-12 px-4 flex items-center justify-between bg-[#121212] text-xs text-red-500 relative overflow-hidden border-t border-zinc-800 font-sans">
-              <div className="flex items-center space-x-3">
-                <div className="w-2.5 h-2.5 bg-red-600 rounded-full cursor-blink animate-pulse" />
-                <span className="font-semibold">Merekam: {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}</span>
-              </div>
-
-              {/* Slide to Cancel slider and text */}
-              <div 
-                className="flex items-center space-x-1 text-[11px] select-none transition-all duration-100 text-zinc-500"
-                style={{
-                  transform: `translateX(${Math.max(-100, Math.min(0, draggedX))}px)`,
-                  opacity: draggedX < -80 ? 0.6 : 1,
-                }}
-              >
-                <span className={draggedX < -80 ? 'text-red-400 font-bold' : ''}>
-                  {draggedX < -80 ? 'Lepas untuk hapus' : '← Geser kiri untuk membatalkan'}
-                </span>
-              </div>
-            </div>
-          ) : recordedBlob ? (
-            /* Preview Stage Overlay */
-            <div className="h-12 px-4 flex items-center justify-between bg-[#121212] text-xs border-t border-zinc-800 text-zinc-100 font-sans">
-              <div className="flex items-center space-x-3 flex-1">
-                <button
-                  type="button"
-                  onClick={handleTogglePreviewPlay}
-                  className="font-bold hover:text-zinc-300 cursor-pointer"
-                  aria-label={isPreviewPlaying ? 'Pause preview' : 'Play preview'}
-                >
-                  [{isPreviewPlaying ? 'Pause' : 'Putar rekaman'}]
-                </button>
-
-                <span className="text-[10px] text-zinc-400">
-                  {Math.floor(previewProgress / 60)}:{(Math.floor(previewProgress) % 60).toString().padStart(2, '0')}
-                  {' / '}
-                  {Math.floor(recordedDuration / 60)}:{(recordedDuration % 60).toString().padStart(2, '0')}
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-3 ml-3 font-bold text-xs">
-                <button
-                  type="button"
-                  onClick={handleDiscardVoiceNote}
-                  className="text-red-500 hover:text-red-400 cursor-pointer"
-                  aria-label="Discard recording"
-                >
-                  Buang
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isUploading}
-                  onClick={handleSendVoiceNote}
-                  className="text-sky-400 hover:text-sky-300 disabled:text-zinc-600 cursor-pointer"
-                  aria-label="Send voice note"
-                >
-                  {isUploading ? 'Mengunggah...' : 'Kirim'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* Default Text Input and Microphone form */
-            <form 
-              onSubmit={handleSend}
-              className="h-14 px-4 flex items-center space-x-3 text-sm bg-black border-t border-zinc-900 font-sans"
+      {/* 3. INPUT PANEL & ACTIVE CONTROLS */}
+      <div className="bg-black border-t border-zinc-900 flex flex-col flex-none pb-[env(safe-area-inset-bottom,8px)] pt-1 select-none">
+        
+        {/* EDITING PREVIEW BAR */}
+        <AnimatePresence>
+          {editingMessage && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-[#121212] border-b border-zinc-800 px-4 py-2.5 flex items-center justify-between text-xs text-neutral-300"
             >
-              <div className="flex-1 bg-zinc-900 border border-zinc-800/85 rounded-full px-4 py-2 flex items-center space-x-2.5">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  inputMode={settings.keyboardType === 'custom' ? 'none' : 'text'}
-                  autoComplete="off"
-                  placeholder={editingMessage ? "Ubah pesan..." : "Kirim pesan..."}
-                  value={text}
-                  onChange={handleInputChange}
-                  onFocus={() => {
-                    if (settings.keyboardType === 'custom') {
-                      setIsKeyboardOpen(true);
-                    }
-                    setTimeout(() => {
-                      scrollToBottom();
-                    }, 150);
-                  }}
-                  className="flex-1 bg-transparent border-none text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-0 py-1"
-                />
-
-                {!text.trim() && (
-                  /* Microphone button for voice notes (holding triggers voice recorder) */
-                  <button
-                    type="button"
-                    onMouseDown={handleMicPressStart}
-                    onTouchStart={handleMicPressStart}
-                    title="Tahan untuk merekam"
-                    aria-label="Tahan untuk merekam"
-                    className="hover:text-white text-zinc-400 cursor-pointer transition select-none touch-none animate-pulse"
-                  >
-                    <Mic size={18} />
-                  </button>
-                )}
+              <div className="flex items-center space-x-2 text-left font-sans">
+                <Pencil size={12} className="text-sky-400" />
+                <span className="font-semibold text-sky-400">Editing message:</span>
+                <span className="truncate max-w-[200px] text-neutral-400 italic">
+                  "{editingMessage.text}"
+                </span>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMessage(null);
+                  setText('');
+                }}
+                className="text-neutral-500 hover:text-white transition font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-              {text.trim() ? (
-                /* Standard Send button */
-                <button
-                  type="submit"
-                  title="Kirim pesan"
-                  aria-label="Kirim pesan"
-                  className="text-sky-500 font-bold hover:text-sky-400 cursor-pointer transition text-sm px-2 py-1 select-none"
-                >
-                  Kirim
-                </button>
-              ) : null}
+        {/* REPLY PREVIEW BAR */}
+        <AnimatePresence>
+          {replyingTo && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-[#121212] border-b border-zinc-800 px-4 py-2 flex items-center justify-between text-xs text-neutral-300"
+            >
+              <div className="flex items-center space-x-2 text-left font-sans">
+                <CornerUpRight size={12} className="text-sky-400" />
+                <span className="font-semibold text-sky-400">Replying to @{replyingTo.senderId}:</span>
+                <span className="truncate max-w-[200px] text-neutral-400 italic">
+                  "{replyingTo.text}"
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelReply}
+                className="text-neutral-500 hover:text-white transition font-semibold cursor-pointer"
+                aria-label="Cancel reply"
+              >
+                Cancel
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-              {settings.keyboardType === 'custom' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsKeyboardOpen(!isKeyboardOpen);
-                  }}
-                  className="text-zinc-400 hover:text-zinc-200 cursor-pointer transition p-1"
-                  title="Keyboard"
-                >
-                  <KeyboardIcon size={18} />
-                </button>
-              )}
+        {isRecording ? (
+          /* Active Recording Stage Overlay */
+          <div className="h-14 px-4 flex items-center justify-between bg-[#121212] text-xs text-red-500 relative overflow-hidden border-t border-zinc-800 font-sans">
+            <div className="flex items-center space-x-3">
+              <div className="w-2.5 h-2.5 bg-red-600 rounded-full cursor-blink animate-pulse" />
+              <span className="font-semibold">Recording: {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}</span>
+            </div>
+
+            {/* Slide to Cancel slider and text */}
+            <div 
+              className="flex items-center space-x-1 text-[11px] select-none transition-all duration-100 text-zinc-500"
+              style={{
+                transform: `translateX(${Math.max(-100, Math.min(0, draggedX))}px)`,
+                opacity: draggedX < -80 ? 0.6 : 1,
+              }}
+            >
+              <span className={draggedX < -80 ? 'text-red-400 font-bold' : ''}>
+                {draggedX < -80 ? 'Release to cancel' : '← Slide left to cancel'}
+              </span>
+            </div>
+          </div>
+        ) : recordedBlob ? (
+          /* Preview Stage Overlay */
+          <div className="h-14 px-4 flex items-center justify-between bg-[#121212] text-xs border-t border-zinc-800 text-zinc-100 font-sans">
+            <div className="flex items-center space-x-3 flex-1">
+              <button
+                type="button"
+                onClick={handleTogglePreviewPlay}
+                className="font-semibold text-sky-400 hover:text-sky-300 cursor-pointer flex items-center gap-1"
+                aria-label={isPreviewPlaying ? 'Pause preview' : 'Play preview'}
+              >
+                {isPreviewPlaying ? <Pause size={14} /> : <Play size={14} />}
+                <span>{isPreviewPlaying ? 'Pause' : 'Play'}</span>
+              </button>
+
+              <span className="text-[10px] text-zinc-400">
+                {Math.floor(previewProgress / 60)}:{(Math.floor(previewProgress) % 60).toString().padStart(2, '0')}
+                {' / '}
+                {Math.floor(recordedDuration / 60)}:{(recordedDuration % 60).toString().padStart(2, '0')}
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-3 ml-3 font-semibold text-xs">
+              <button
+                type="button"
+                onClick={handleDiscardVoiceNote}
+                className="text-red-400 hover:text-red-300 cursor-pointer"
+                aria-label="Discard recording"
+              >
+                Discard
+              </button>
 
               <button
                 type="button"
-                onClick={triggerHackingSequence}
-                className="text-zinc-500 hover:text-red-400 cursor-pointer transition text-xs font-semibold px-1 py-1"
+                disabled={isUploading}
+                onClick={handleSendVoiceNote}
+                className="text-sky-400 hover:text-sky-300 disabled:text-zinc-600 cursor-pointer font-bold"
+                aria-label="Send voice message"
               >
-                [exit]
+                {isUploading ? 'Sending...' : 'Send'}
               </button>
-            </form>
-          )}
-
-          {/* Custom Native-App-style Virtual Keyboard */}
-          {settings.keyboardType === 'custom' && isKeyboardOpen && !isRecording && !recordedBlob && (
-            <div className="w-full bg-black border-t border-zinc-900">
-              <VirtualKeyboard
-                onKeyPress={insertText}
-                onBackspace={handleBackspace}
-                onSpace={handleSpace}
-                onEnter={() => handleSend()}
-                onClose={() => setIsKeyboardOpen(false)}
-                enterLabel="Kirim"
-                height={settings.keyboardHeight}
-              />
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        ) : (
+          /* Default Text Input and Microphone form */
+          <form 
+            onSubmit={handleSend}
+            className="min-h-14 px-3 py-2 flex items-center space-x-2 text-sm bg-black border-t border-zinc-900 font-sans"
+          >
+            <div className="flex-1 bg-zinc-900/90 border border-zinc-800 rounded-full px-4 py-2 flex items-center space-x-2.5 focus-within:border-zinc-700 transition">
+              <input
+                ref={inputRef}
+                type="text"
+                inputMode={settings.keyboardType === 'custom' ? 'none' : 'text'}
+                autoComplete="off"
+                placeholder={editingMessage ? "Edit message..." : "Type a message..."}
+                value={text}
+                onChange={handleInputChange}
+                onFocus={() => {
+                  if (settings.keyboardType === 'custom') {
+                    setIsKeyboardOpen(true);
+                  }
+                  setTimeout(() => {
+                    scrollToBottom();
+                  }, 150);
+                }}
+                className="flex-1 bg-transparent border-none text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-0 py-0.5"
+              />
+
+              {!text.trim() && (
+                /* Microphone button for voice notes (holding triggers voice recorder) */
+                <button
+                  type="button"
+                  onMouseDown={handleMicPressStart}
+                  onTouchStart={handleMicPressStart}
+                  title="Hold to record voice message"
+                  aria-label="Hold to record voice message"
+                  className="hover:text-white text-zinc-400 cursor-pointer transition select-none touch-none p-1"
+                >
+                  <Mic size={18} />
+                </button>
+              )}
+            </div>
+
+            {text.trim() ? (
+              /* Standard Send button */
+              <button
+                type="submit"
+                title="Send message"
+                aria-label="Send message"
+                className="w-10 h-10 rounded-full bg-sky-500 hover:bg-sky-400 text-white flex items-center justify-center cursor-pointer transition select-none flex-none shadow"
+              >
+                <Send size={16} />
+              </button>
+            ) : null}
+
+            {settings.keyboardType === 'custom' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsKeyboardOpen(!isKeyboardOpen);
+                }}
+                className="text-zinc-400 hover:text-zinc-200 cursor-pointer transition p-2"
+                title="Toggle Keyboard"
+              >
+                <KeyboardIcon size={18} />
+              </button>
+            )}
+          </form>
+        )}
+
+        {/* Custom Native-App-style Virtual Keyboard */}
+        {settings.keyboardType === 'custom' && isKeyboardOpen && !isRecording && !recordedBlob && (
+          <div className="w-full bg-black border-t border-zinc-900">
+            <VirtualKeyboard
+              onKeyPress={insertText}
+              onBackspace={handleBackspace}
+              onSpace={handleSpace}
+              onEnter={() => handleSend()}
+              onClose={() => setIsKeyboardOpen(false)}
+              enterLabel="Send"
+              height={settings.keyboardHeight}
+            />
+          </div>
+        )}
+      </div>
 
       {/* 4. REUSABLE SYSTEM SNACKBAR */}
       <AnimatePresence>
@@ -1235,7 +1027,6 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
         onEdit={(msg) => {
           setEditingMessage(msg);
           setText(msg.text);
-          setIsFooterActive(true);
           setTimeout(() => {
             inputRef.current?.focus();
           }, 100);
