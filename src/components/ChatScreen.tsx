@@ -16,7 +16,8 @@ import {
   Phone,
   Keyboard as KeyboardIcon,
   ChevronLeft,
-  Pencil
+  Pencil,
+  ImagePlus
 } from 'lucide-react';
 import { ChatViewModelType } from '../hooks/ChatViewModel';
 import { MessageBubble } from './MessageBubble';
@@ -26,6 +27,7 @@ import { MessageActionSheet } from './MessageActionSheet';
 import { Message } from '../models/Message';
 import { VoiceRecorderManager } from '../services/VoiceRecorderManager';
 import { VoiceNoteRepository } from '../repositories/VoiceNoteRepository';
+import { ImageMessageRepository } from '../repositories/ImageMessageRepository';
 import { AudioPlayerManager } from '../services/AudioPlayerManager';
 import { WaveformView } from './WaveformView';
 import VirtualKeyboard from './VirtualKeyboard';
@@ -128,6 +130,53 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
   const startXRef = useRef(0);
   const isRecordingRef = useRef(false);
+
+  // Photo Attachment states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+
+  const handleImageFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showSnackbar('Please select an image file (JPG, PNG, WEBP, etc.).', 'error');
+      return;
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      showSnackbar('Photo is too large. Maximum size is 25MB.', 'error');
+      return;
+    }
+
+    setSelectedImageFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setSelectedImagePreview(previewUrl);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCancelSelectedImage = () => {
+    if (selectedImagePreview) {
+      URL.revokeObjectURL(selectedImagePreview);
+    }
+    setSelectedImageFile(null);
+    setSelectedImagePreview(null);
+  };
+
+  // Clean up preview audio and image URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (selectedImagePreview) {
+        URL.revokeObjectURL(selectedImagePreview);
+      }
+    };
+  }, [selectedImagePreview]);
 
   // Clean up preview audio on unmount
   useEffect(() => {
@@ -491,6 +540,39 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
+    if (selectedImageFile) {
+      setIsUploadingImage(true);
+      try {
+        const convId = generateConversationId(viewModel.myUsername || '', activeTargetUser.username);
+        const replyToData = replyingTo ? {
+          messageId: replyingTo.messageId,
+          text: replyingTo.text,
+          senderId: replyingTo.senderId
+        } : undefined;
+
+        await ImageMessageRepository.getInstance().sendImageMessage(
+          convId,
+          viewModel.myUsername || '',
+          activeTargetUser.username,
+          selectedImageFile,
+          text.trim(),
+          replyToData
+        );
+
+        handleCancelSelectedImage();
+        setText('');
+        handleCancelReply();
+        showSnackbar('Photo sent.', 'success');
+      } catch (err: any) {
+        console.error('Failed to send image:', err);
+        showSnackbar(err.message || 'Failed to send photo.', 'error');
+      } finally {
+        setIsUploadingImage(false);
+      }
+      return;
+    }
+
     if (!text.trim()) return;
 
     if (editingMessage) {
@@ -735,6 +817,29 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                           {msg.id === playingVoiceId ? 'Pause' : 'Play'}
                         </button>
                       </div>
+                    ) : msg.imageUrl ? (
+                      <div className="flex flex-col">
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingImage(msg.imageUrl || null);
+                          }}
+                          className="rounded-[14px] overflow-hidden max-w-[240px] max-h-[280px] bg-black/40 cursor-pointer transition hover:opacity-90 active:scale-[0.99] relative group"
+                        >
+                          <img
+                            src={msg.imageUrl}
+                            alt="Shared photo"
+                            className="w-full h-auto max-h-[280px] object-cover rounded-[14px]"
+                            loading="lazy"
+                          />
+                        </div>
+                        {msg.text && msg.text !== '[Photo]' && (
+                          <span className="whitespace-pre-wrap break-words mt-1 px-0.5">{msg.text}</span>
+                        )}
+                        {msg.isEdited && (
+                          <span className="text-[9px] text-white/50 block text-right mt-0.5 select-none font-mono">(edited)</span>
+                        )}
+                      </div>
                     ) : (
                       <div className="flex flex-col">
                         <span className="whitespace-pre-wrap break-words">{msg.text}</span>
@@ -843,6 +948,37 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
           )}
         </AnimatePresence>
 
+          {/* Selected image preview bar */}
+          {selectedImagePreview && (
+            <div className="px-3 py-2 bg-neutral-900/95 border-t border-neutral-800 flex items-center justify-between">
+              <div className="flex items-center space-x-2.5 min-w-0">
+                <img
+                  src={selectedImagePreview}
+                  alt="Selected preview"
+                  className="w-10 h-10 object-cover rounded-lg border border-neutral-700 flex-none"
+                />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold text-neutral-200 truncate">
+                    {selectedImageFile?.name || 'Selected photo'}
+                  </span>
+                  <span className="text-[10px] text-neutral-400">
+                    {selectedImageFile ? `${(selectedImageFile.size / (1024 * 1024)).toFixed(1)} MB` : ''} • Ready to send
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelSelectedImage}
+                disabled={isUploadingImage}
+                className="p-1 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition cursor-pointer"
+                title="Cancel photo"
+                aria-label="Cancel photo"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+
         {isRecording ? (
           /* Active Recording Stage Overlay */
           <div className="h-14 px-4 flex items-center justify-between bg-[#121212] text-xs text-red-500 relative overflow-hidden border-t border-zinc-800 font-sans">
@@ -912,13 +1048,32 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
             onSubmit={handleSend}
             className="min-h-14 px-3 py-2 flex items-center space-x-2 text-sm bg-black border-t border-zinc-900 font-sans"
           >
-            <div className="flex-1 bg-zinc-900/90 border border-zinc-800 rounded-full px-4 py-2 flex items-center space-x-2.5 focus-within:border-zinc-700 transition">
+            <div className="flex-1 bg-zinc-900/90 border border-zinc-800 rounded-full px-3.5 py-2 flex items-center space-x-2 focus-within:border-zinc-700 transition">
+              {/* Photo Attachment Button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingImage}
+                title="Attach photo"
+                aria-label="Attach photo"
+                className="text-zinc-400 hover:text-white cursor-pointer transition p-1 -ml-1 flex-none"
+              >
+                <ImagePlus size={18} />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageFileSelected}
+                className="hidden"
+              />
+
               <input
                 ref={inputRef}
                 type="text"
                 inputMode={settings.keyboardType === 'custom' ? 'none' : 'text'}
                 autoComplete="off"
-                placeholder={editingMessage ? "Edit message..." : "Type a message..."}
+                placeholder={editingMessage ? "Edit message..." : selectedImageFile ? "Add a caption..." : "Type a message..."}
                 value={text}
                 onChange={handleInputChange}
                 onFocus={() => {
@@ -932,7 +1087,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                 className="flex-1 bg-transparent border-none text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-0 py-0.5"
               />
 
-              {!text.trim() && (
+              {!text.trim() && !selectedImageFile && (
                 /* Microphone button for voice notes (holding triggers voice recorder) */
                 <button
                   type="button"
@@ -947,15 +1102,16 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
               )}
             </div>
 
-            {text.trim() ? (
-              /* Standard Send button */
+            {(text.trim() || selectedImageFile) ? (
+              /* Send button */
               <button
                 type="submit"
+                disabled={isUploadingImage}
                 title="Send message"
                 aria-label="Send message"
-                className="w-10 h-10 rounded-full bg-sky-500 hover:bg-sky-400 text-white flex items-center justify-center cursor-pointer transition select-none flex-none shadow"
+                className="w-10 h-10 rounded-full bg-sky-500 hover:bg-sky-400 text-white flex items-center justify-center cursor-pointer transition select-none flex-none shadow disabled:opacity-50"
               >
-                <Send size={16} />
+                {isUploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>
             ) : null}
 
@@ -1028,6 +1184,28 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
           }, 100);
         }}
       />
+
+      {/* 6. FULLSCREEN PHOTO LIGHTBOX VIEWER */}
+      {viewingImage && (
+        <div
+          onClick={() => setViewingImage(null)}
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 select-none cursor-zoom-out"
+        >
+          <button
+            onClick={() => setViewingImage(null)}
+            className="absolute top-4 right-4 p-2.5 rounded-full bg-neutral-900/80 hover:bg-neutral-800 text-white transition cursor-pointer"
+            aria-label="Close image preview"
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={viewingImage}
+            alt="Full size view"
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[85vh] max-w-[95vw] sm:max-w-md object-contain rounded-xl shadow-2xl cursor-default"
+          />
+        </div>
+      )}
 
     </div>
   );

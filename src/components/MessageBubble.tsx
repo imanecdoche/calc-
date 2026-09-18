@@ -139,6 +139,22 @@ export function MessageBubble({
             </div>
           ) : message.audioUrl ? (
             <VoiceNoteBubble message={message} isMe={isMe} />
+          ) : message.imageUrl ? (
+            <div className="flex flex-col">
+              <div className="rounded-[14px] overflow-hidden max-w-[240px] max-h-[280px] bg-black/40 mb-1">
+                <img
+                  src={message.imageUrl}
+                  alt="Shared photo"
+                  className="w-full h-auto max-h-[280px] object-cover rounded-[14px]"
+                  loading="lazy"
+                />
+              </div>
+              {message.text && message.text !== '[Photo]' && (
+                <p className="text-xs font-sans break-all select-text leading-relaxed whitespace-pre-wrap text-left mt-1">
+                  {message.text}
+                </p>
+              )}
+            </div>
           ) : (
             <p className="text-xs font-sans break-all select-text leading-relaxed whitespace-pre-wrap text-left">
               {message.text}

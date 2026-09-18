@@ -581,6 +581,7 @@ export function useChatViewModel() {
           audioUrl: data.audioUrl,
           duration: data.duration,
           audioDuration: data.audioDuration,
+          imageUrl: data.imageUrl,
           isEdited: data.isEdited
         };
       });

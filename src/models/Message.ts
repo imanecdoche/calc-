@@ -13,5 +13,6 @@ export interface Message {
   audioUrl?: string;
   duration?: number;
   audioDuration?: number;
+  imageUrl?: string;
   isEdited?: boolean;
 }
