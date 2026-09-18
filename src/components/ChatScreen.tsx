@@ -299,7 +299,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       const voiceNoteRepo = VoiceNoteRepository.getInstance();
 
       const replyToData = replyingTo ? {
-        messageId: replyingTo.id,
+        messageId: replyingTo.messageId,
         text: replyingTo.text,
         senderId: replyingTo.senderId
       } : undefined;
@@ -345,7 +345,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     hasMoreHistory
   } = viewModel;
 
-  // Periodic tick to auto-update "offline (x minutes ago)" values
+  // Periodic tick to auto-update relative last online timestamps (every 15 seconds)
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => {
@@ -354,49 +354,40 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     return () => clearInterval(timer);
   }, []);
 
-  const getPresenceSubtext = () => {
+  const presenceStatus = useMemo(() => {
     if (targetIsTyping) {
       return 'typing...';
     }
     if (targetPresence?.isOnline) {
-      return 'online';
+      return 'Active now';
     }
     if (!targetPresence?.lastSeen) {
-      return 'offline';
+      return 'Offline';
     }
-    const diffMs = Date.now() - targetPresence.lastSeen;
-    if (diffMs < 60000) {
-      return 'offline (just now)';
-    }
+
+    const diffMs = Math.max(0, Date.now() - targetPresence.lastSeen);
+    const diffSec = Math.floor(diffMs / 1000);
     const diffMin = Math.floor(diffMs / 60000);
+
+    if (diffSec < 60) {
+      return 'Last online just now';
+    }
     if (diffMin < 60) {
-      return `offline (${diffMin} min ago)`;
+      return `Last online ${diffMin} min ago`;
     }
     const diffHours = Math.floor(diffMin / 60);
     if (diffHours < 24) {
-      return `offline (${diffHours} hours ago)`;
+      return `Last online ${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
     }
     const diffDays = Math.floor(diffHours / 24);
-    return `offline (${diffDays} days ago)`;
-  };
-
-  const isTargetActive = targetIsTyping || (targetPresence?.isOnline ?? false);
-
-  const formattedStatus = useMemo(() => {
-    const raw = getPresenceSubtext().toLowerCase();
-    if (raw.includes('online')) return 'online';
-    if (raw.includes('typing')) return 'typing...';
-    // If "offline (3 min ago)" -> convert to "on 3 m ago"
-    // If "offline (just now)" -> convert to "on 0 m ago"
-    const minMatch = raw.match(/(\d+)\s*min/);
-    if (minMatch) return `on ${minMatch[1]} m ago`;
-    const hrMatch = raw.match(/(\d+)\s*hours/);
-    if (hrMatch) return `on ${hrMatch[1]} h ago`;
-    const dayMatch = raw.match(/(\d+)\s*days/);
-    if (dayMatch) return `on ${dayMatch[1]} d ago`;
-    if (raw.includes('just now')) return 'on 0 m ago';
-    return raw;
-  }, [getPresenceSubtext]);
+    if (diffDays === 1) {
+      return 'Last online yesterday';
+    }
+    if (diffDays < 7) {
+      return `Last online ${diffDays} days ago`;
+    }
+    return 'Offline';
+  }, [targetIsTyping, targetPresence, tick]);
 
   // Auto focus input on mount
   useEffect(() => {
@@ -573,12 +564,12 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
           <div className="text-left flex flex-col">
             <span className="font-semibold text-xs leading-tight tracking-wide text-neutral-100 flex items-center gap-1.5">
               {activeTargetUser?.displayName || activeTargetUser?.username}
-              {targetPresence?.isOnline && (
+              {(targetPresence?.isOnline || targetIsTyping) && (
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse" />
               )}
             </span>
             <span className="text-[10px] text-neutral-400 leading-none mt-0.5">
-              @{activeTargetUser?.username} • {targetPresence?.isOnline ? 'Active now' : 'Offline'}
+              @{activeTargetUser?.username} • <span className={targetIsTyping ? 'text-emerald-400 italic' : ''}>{presenceStatus}</span>
             </span>
           </div>
         </div>
