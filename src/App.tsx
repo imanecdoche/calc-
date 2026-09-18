@@ -23,6 +23,7 @@ import SecretMessengerScreen from './components/SecretMessengerScreen';
 import DevUnlockScreen from './components/DevUnlockScreen';
 import DevToolsScreen from './components/DevToolsScreen';
 import WikiLockScreen from './components/WikiLockScreen';
+import ErrorBoundary from './components/ErrorBoundary';
 
 export default function App() {
   const {
@@ -179,7 +180,8 @@ export default function App() {
               transition={{ duration: 0.2 }}
               className="absolute inset-0"
             >
-              {screen === 'calculator' && (
+              <ErrorBoundary onReset={() => navigate('unlock')}>
+                {screen === 'calculator' && (
                 <CalculatorScreen
                   expression={expression}
                   result={result}
@@ -277,6 +279,7 @@ export default function App() {
                   onUnlockToCalculator={() => navigate('unlock')}
                 />
               )}
+              </ErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </div>

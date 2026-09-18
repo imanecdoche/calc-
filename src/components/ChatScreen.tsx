@@ -103,25 +103,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     insertText(' ');
   };
 
-  // Manage visual viewport height to prevent keyboard obscuring
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!window.visualViewport) return;
-
-    const handleResize = () => {
-      setViewportHeight(window.visualViewport ? window.visualViewport.height : window.innerHeight);
-    };
-
-    window.visualViewport.addEventListener('resize', handleResize);
-    window.visualViewport.addEventListener('scroll', handleResize);
-    handleResize();
-
-    return () => {
-      window.visualViewport?.removeEventListener('resize', handleResize);
-      window.visualViewport?.removeEventListener('scroll', handleResize);
-    };
-  }, []);
 
   // M3 UI & Interactive states
   const [longPressedMessage, setLongPressedMessage] = useState<Message | null>(null);
@@ -539,10 +521,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
   if (!activeTargetUser) return null;
 
   return (
-    <div 
-      className="absolute inset-0 bg-[#000000] flex flex-col justify-between overflow-hidden z-20 font-sans text-white"
-      style={viewportHeight ? { height: `${viewportHeight}px`, bottom: 'auto' } : {}}
-    >
+    <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col overflow-hidden font-sans text-white">
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes terminal-blink {
           0%, 100% { opacity: 1; }
@@ -573,33 +552,33 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       
       {/* HEADER */}
       <div 
-        className="flex items-center justify-between px-4 py-3 bg-black border-b border-zinc-900 text-white flex-none select-none h-[60px]"
+        className="flex items-center justify-between px-4 py-2.5 bg-[#0a0a0a] border-b border-neutral-900 text-white flex-none select-none h-14"
       >
         <div className="flex items-center space-x-3">
           {/* Back Chevron */}
           <button 
             onClick={() => viewModel.disconnect()}
-            className="text-white hover:opacity-80 transition cursor-pointer p-1 -ml-2"
+            className="text-white hover:opacity-80 transition cursor-pointer p-1 -ml-1"
             aria-label="Back"
           >
-            <ChevronLeft size={24} />
+            <ChevronLeft size={22} />
           </button>
           
           {/* Target Profile Initials */}
-          <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center font-bold text-xs text-white select-none shadow border border-zinc-850">
-            {activeTargetUser.displayName ? activeTargetUser.displayName.slice(0, 2).toUpperCase() : 'U'}
+          <div className="w-8 h-8 rounded-full bg-neutral-850 flex items-center justify-center font-bold text-xs text-white select-none border border-neutral-800">
+            {activeTargetUser?.displayName ? activeTargetUser.displayName.slice(0, 2).toUpperCase() : (activeTargetUser?.username ? activeTargetUser.username.slice(0, 2).toUpperCase() : 'U')}
           </div>
 
           {/* User Details */}
           <div className="text-left flex flex-col">
-            <span className="font-semibold text-sm leading-tight tracking-wide text-zinc-100 flex items-center gap-1">
-              {activeTargetUser.displayName}
-              {targetPresence.isOnline && (
-                <span className="w-2 h-2 bg-green-500 rounded-full inline-block animate-pulse" />
+            <span className="font-semibold text-xs leading-tight tracking-wide text-neutral-100 flex items-center gap-1.5">
+              {activeTargetUser?.displayName || activeTargetUser?.username}
+              {targetPresence?.isOnline && (
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse" />
               )}
             </span>
-            <span className="text-[10px] text-zinc-400 leading-none mt-0.5">
-              @{activeTargetUser.username} • {targetPresence.isOnline ? 'Active now' : 'Offline'}
+            <span className="text-[10px] text-neutral-400 leading-none mt-0.5">
+              @{activeTargetUser?.username} • {targetPresence?.isOnline ? 'Active now' : 'Offline'}
             </span>
           </div>
         </div>
@@ -612,7 +591,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
             title="Start voice call"
             aria-label="Start voice call"
           >
-            <Phone size={18} />
+            <Phone size={17} />
           </button>
 
           {/* Lock Button */}
@@ -625,7 +604,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
             title="Lock chat"
             aria-label="Lock chat"
           >
-            <Lock size={14} />
+            <Lock size={13} />
             <span>Lock</span>
           </button>
         </div>
@@ -635,7 +614,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       <div 
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-3 terminal-scrollbar relative bg-black"
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-3 terminal-scrollbar relative bg-[#0a0a0a]"
         style={{ overflowX: 'hidden' }}
       >
         

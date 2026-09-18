@@ -301,32 +301,22 @@ export default function SecretMessengerScreen({
 
       {/* 2. Main Content */}
       <div className="flex-1 min-h-0 relative flex flex-col">
-        <AnimatePresence mode="wait">
-          {viewModel.isLoading || viewModel.connectingToUser ? (
-            // LOADING STATE
-            <motion.div
-              key="loading-screen"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 flex flex-col items-center justify-center px-6 bg-[#0a0a0a]"
-            >
-              <Loader2 size={32} className="text-neutral-400 animate-spin mb-3" />
-              <span className="text-xs font-medium text-neutral-400 tracking-wide font-sans">
-                {viewModel.connectingToUser ? 'Connecting to chat...' : 'Setting up profile...'}
-              </span>
-            </motion.div>
-          ) : !viewModel.myUsername ? (
-            // AUTHENTICATION VIEW (Register by default on new devices, or Login)
-            <motion.div
-              key={authMode}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.15 }}
-              className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto"
-            >
-              <div className="w-full max-w-sm bg-[#111111] border border-neutral-850 rounded-2xl p-6 sm:p-8 shadow-2xl">
+        {viewModel.isLoading || viewModel.connectingToUser ? (
+          // LOADING STATE
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center px-6 bg-[#0a0a0a]"
+          >
+            <Loader2 size={32} className="text-neutral-400 animate-spin mb-3" />
+            <span className="text-xs font-medium text-neutral-400 tracking-wide font-sans">
+              {viewModel.connectingToUser ? 'Connecting to chat...' : 'Setting up profile...'}
+            </span>
+          </div>
+        ) : !viewModel.myUsername ? (
+          // AUTHENTICATION VIEW (Register by default on new devices, or Login)
+          <div
+            className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto"
+          >
+            <div className="w-full max-w-sm bg-[#111111] border border-neutral-850 rounded-2xl p-6 sm:p-8 shadow-2xl">
                 
                 {/* Header Title */}
                 <div className="mb-6 text-center">
@@ -465,15 +455,10 @@ export default function SecretMessengerScreen({
                 </div>
 
               </div>
-            </motion.div>
+            </div>
           ) : !viewModel.activeTargetUser ? (
             // START CONVERSATION VIEW (Logged in user entering recipient)
-            <motion.div
-              key="start-chat-screen"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.15 }}
+            <div
               className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto"
             >
               {/* Active Account Status Bar */}
@@ -567,15 +552,10 @@ export default function SecretMessengerScreen({
                 </form>
 
               </div>
-            </motion.div>
+            </div>
           ) : (
             // CHAT SCREEN
-            <motion.div
-              key="chat-screen"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.12 }}
+            <div
               className="absolute inset-0"
             >
               <ChatScreen 
@@ -589,9 +569,8 @@ export default function SecretMessengerScreen({
                 onLock={onLock}
                 onExitToCalculator={onExitToCalculator}
               />
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
       </div>
 
       {/* 3. Voice Call Overlay */}
