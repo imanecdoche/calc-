@@ -147,16 +147,16 @@ export class UserRepository {
     // 1. Fetch the existing user profile
     const existingUser = await this.getUserByUsername(normalized);
     if (!existingUser) {
-      return { success: false, error: 'Username tidak ditemukan.' };
+      return { success: false, error: 'Username not found.' };
     }
 
     const correctPassword = (existingUser as any).password;
     if (!correctPassword) {
-      return { success: false, error: 'Akun ini belum memiliki password. Silakan atur password di perangkat asal terlebih dahulu.' };
+      return { success: false, error: 'This account has no password set. Please set a password on your original device first.' };
     }
 
     if (correctPassword !== passwordVal) {
-      return { success: false, error: 'Password salah.' };
+      return { success: false, error: 'Incorrect password.' };
     }
 
     // 2. Link this username to the current device's UID by writing a new profile document under newUid

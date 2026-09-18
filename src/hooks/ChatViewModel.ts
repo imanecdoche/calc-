@@ -182,15 +182,15 @@ export function useChatViewModel() {
   // 4. Register user's own unique username
   const registerMyUsername = useCallback(async (username: string, passwordVal: string): Promise<{ success: boolean; error?: string }> => {
     if (!authUid) {
-      return { success: false, error: 'Koneksi offline. Silakan coba lagi.' };
+      return { success: false, error: 'Network offline. Please check your connection.' };
     }
     setErrorMsg(null);
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!cleanUsername) {
-      return { success: false, error: 'Username tidak boleh kosong.' };
+      return { success: false, error: 'Username cannot be empty.' };
     }
     if (!passwordVal || passwordVal.trim().length < 4) {
-      return { success: false, error: 'Password minimal harus 4 karakter.' };
+      return { success: false, error: 'Password must be at least 4 characters.' };
     }
 
     try {
@@ -200,23 +200,23 @@ export function useChatViewModel() {
         setMyUserHasPassword(true);
         return { success: true };
       } else {
-        return { success: false, error: 'Username sudah digunakan oleh orang lain. Silakan buat yang unik.' };
+        return { success: false, error: 'This username is already taken. Please choose another.' };
       }
     } catch (err) {
       console.error('Registration error:', err);
-      return { success: false, error: 'Username sudah terdaftar.' };
+      return { success: false, error: 'This username is already registered.' };
     }
   }, [authUid]);
 
   // Login to existing account
   const loginToExistingAccount = useCallback(async (username: string, passwordVal: string): Promise<{ success: boolean; error?: string }> => {
     if (!authUid) {
-      return { success: false, error: 'Koneksi offline. Silakan coba lagi.' };
+      return { success: false, error: 'Network offline. Please check your connection.' };
     }
     setErrorMsg(null);
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (!cleanUsername || !passwordVal) {
-      return { success: false, error: 'Username dan sandi tidak boleh kosong.' };
+      return { success: false, error: 'Username and password cannot be empty.' };
     }
 
     try {
@@ -226,11 +226,11 @@ export function useChatViewModel() {
         setMyUserHasPassword(true);
         return { success: true };
       } else {
-        return { success: false, error: res.error || 'Login gagal.' };
+        return { success: false, error: res.error || 'Login failed. Check your credentials.' };
       }
     } catch (err) {
       console.error('Login error:', err);
-      return { success: false, error: 'Gagal menghubungkan. Silakan coba lagi.' };
+      return { success: false, error: 'Failed to connect. Please try again.' };
     }
   }, [authUid]);
 

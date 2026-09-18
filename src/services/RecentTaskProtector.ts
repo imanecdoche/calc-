@@ -8,8 +8,6 @@ export class RecentTaskProtector {
   private constructor() {
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.handleVisibilityChange);
-      window.addEventListener('blur', this.handleBlur);
-      window.addEventListener('focus', this.handleFocus);
     }
   }
 
@@ -22,16 +20,6 @@ export class RecentTaskProtector {
 
   private handleVisibilityChange = () => {
     this.isAppVisible = document.visibilityState === 'visible';
-    this.notify();
-  };
-
-  private handleBlur = () => {
-    this.isAppVisible = false;
-    this.notify();
-  };
-
-  private handleFocus = () => {
-    this.isAppVisible = true;
     this.notify();
   };
 
@@ -60,8 +48,6 @@ export class RecentTaskProtector {
   public destroy() {
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-      window.removeEventListener('blur', this.handleBlur);
-      window.removeEventListener('focus', this.handleFocus);
     }
     this.listeners.clear();
     RecentTaskProtector.instance = null;
