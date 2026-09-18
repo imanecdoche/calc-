@@ -89,31 +89,32 @@ export default function SecretMessengerScreen({
   const [terminalPendingUsername, setTerminalPendingUsername] = useState('');
   const [terminalState, setTerminalState] = useState<'app_access_key' | 'username' | 'passphrase' | 'destination'>('app_access_key');
 
-  // Force re-verification of the access key every single time the screen mounts, unless entering via a secret shortcut
+  // Session access is already verified via PIN 1234 at the entry screen
   useEffect(() => {
-    if (directTargetUser) {
-      setSessionAccessVerified(true);
-      if (viewModel.myUsername) {
-        setTerminalState('destination');
-        setActiveInputField('target-username');
-      } else {
-        setTerminalState('username');
-        setActiveInputField('my-username');
-      }
-      setTerminalPendingUsername('');
-      setTerminalAccessKeyInput('');
-      setMyUsernameInput('');
-      setMyPasswordInput('');
+    setSessionAccessVerified(true);
+    if (viewModel.myUsername) {
+      setTerminalState('destination');
+      setActiveInputField('target-username');
     } else {
-      setSessionAccessVerified(false);
-      setTerminalState('app_access_key');
-      setTerminalPendingUsername('');
-      setTerminalAccessKeyInput('');
-      setMyUsernameInput('');
-      setMyPasswordInput('');
-      setActiveInputField('terminal-access-key');
+      setTerminalState('username');
+      setActiveInputField('my-username');
     }
+    setTerminalPendingUsername('');
+    setTerminalAccessKeyInput('');
+    setMyUsernameInput('');
+    setMyPasswordInput('');
   }, [directTargetUser, viewModel.myUsername]);
+
+  // Auto-focus target-username input field when destination state is active
+  useEffect(() => {
+    if (sessionAccessVerified && viewModel.myUsername && !viewModel.activeTargetUser) {
+      const timer = setTimeout(() => {
+        const inputEl = document.getElementById('target-username');
+        if (inputEl) inputEl.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [sessionAccessVerified, viewModel.myUsername, viewModel.activeTargetUser]);
 
   // Auto-submit terminal access key when length matches the correct app passcode length
   useEffect(() => {
@@ -486,7 +487,7 @@ export default function SecretMessengerScreen({
 
   return (
     <div 
-      className="absolute inset-0 bg-[#0a0a0a] flex flex-col justify-between text-neutral-100 select-none"
+      className="absolute inset-0 bg-[#0a0a0a] flex flex-col justify-between text-neutral-100 select-none overflow-hidden"
       style={viewportHeight ? { height: `${viewportHeight}px`, bottom: 'auto' } : {}}
     >
       
@@ -827,9 +828,11 @@ export default function SecretMessengerScreen({
       </div>
 
       {/* 3. Footer */}
-      <footer className="min-h-[16px] h-auto pt-1 pb-[env(safe-area-inset-bottom,4px)] bg-[#0a0a0a] border-t border-neutral-950 flex items-center justify-between px-4 select-none flex-none">
-        {/* Simple footer for high visual cleanliness */}
-      </footer>
+      {!viewModel.activeTargetUser && (
+        <footer className="min-h-[16px] h-auto pt-1 pb-[env(safe-area-inset-bottom,4px)] bg-[#0a0a0a] border-t border-neutral-950 flex items-center justify-between px-4 select-none flex-none">
+          {/* Simple footer for high visual cleanliness */}
+        </footer>
+      )}
 
       {/* 4. Recent Apps Task Protection Overlay */}
       <AnimatePresence>

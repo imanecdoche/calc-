@@ -55,8 +55,8 @@ const INITIAL_DATA: LocalStorageData = {
 
 export function useCalculatorViewModel() {
   // --- Screen Navigation ---
-  const [screen, setScreen] = useState<AppScreen>('calculator');
-  const [prevScreen, setPrevScreen] = useState<AppScreen>('calculator');
+  const [screen, setScreen] = useState<AppScreen>('unlock');
+  const [prevScreen, setPrevScreen] = useState<AppScreen>('unlock');
 
   // --- Calculator States ---
   const [expression, setExpression] = useState<string>('');
@@ -459,7 +459,7 @@ export function useCalculatorViewModel() {
     localStorage.removeItem(STORAGE_KEY);
     loadFromData(INITIAL_DATA);
     setHistory([]);
-    setScreen('calculator');
+    setScreen('unlock');
     showToast('Application data has been fully reset.', 'info');
   };
 

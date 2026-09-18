@@ -228,7 +228,7 @@ export default function App() {
                 <UnlockScreen
                   correctPasswordVal={password}
                   onUnlockSuccess={() => navigate('messenger')}
-                  onCancel={() => navigate('calculator')}
+                  onUnlockDev={() => navigate('dev_tools')}
                   showToast={showToast}
                 />
               )}
@@ -236,8 +236,8 @@ export default function App() {
               {screen === 'messenger' && (
                 <SecretMessengerScreen
                   settings={settings}
-                  onLock={() => navigate('wiki_lock')}
-                  onExitToCalculator={() => navigate('calculator')}
+                  onLock={() => navigate('unlock')}
+                  onExitToCalculator={() => navigate('unlock')}
                   onOpenSettings={() => navigate('settings')}
                   onOpenVault={() => navigate('vault')}
                   showToast={showToast}
@@ -259,7 +259,7 @@ export default function App() {
                   deletePassword={deletePassword}
                   addDiaryEntry={addDiaryEntry}
                   deleteDiaryEntry={deleteDiaryEntry}
-                  onLock={() => navigate('wiki_lock')}
+                  onLock={() => navigate('unlock')}
                   showToast={showToast}
                   onOpenSettings={() => navigate('settings')}
                   onOpenMessenger={() => navigate('messenger')}
@@ -277,7 +277,7 @@ export default function App() {
                   resetAllData={resetAllData}
                   clearCache={clearCache}
                   getStorageUsage={getStorageUsage}
-                  onBack={() => navigate(prevScreen)}
+                  onBack={() => navigate(prevScreen === 'settings' || prevScreen === 'calculator' ? 'unlock' : prevScreen)}
                   showToast={showToast}
                   isSecureEnclave={prevScreen === 'messenger' || prevScreen === 'vault'}
                   shortcuts={shortcuts}
@@ -289,21 +289,21 @@ export default function App() {
               {screen === 'dev_unlock' && (
                 <DevUnlockScreen
                   onUnlockSuccess={() => navigate('dev_tools')}
-                  onCancel={() => navigate('calculator')}
+                  onCancel={() => navigate('unlock')}
                   showToast={showToast}
                 />
               )}
 
               {screen === 'dev_tools' && (
                 <DevToolsScreen
-                  onBack={() => navigate('calculator')}
+                  onBack={() => navigate('unlock')}
                   showToast={showToast}
                 />
               )}
 
               {screen === 'wiki_lock' && (
                 <WikiLockScreen
-                  onUnlockToCalculator={() => navigate('calculator')}
+                  onUnlockToCalculator={() => navigate('unlock')}
                 />
               )}
             </motion.div>

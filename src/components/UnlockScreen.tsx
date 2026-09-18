@@ -4,15 +4,17 @@ import { Eye, EyeOff, Lock, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { SecureWindowManager } from '../services/SecureWindowManager';
 
 interface UnlockScreenProps {
-  correctPasswordVal: string;
+  correctPasswordVal?: string;
   onUnlockSuccess: () => void;
-  onCancel: () => void;
+  onUnlockDev?: () => void;
+  onCancel?: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 export default function UnlockScreen({
-  correctPasswordVal,
+  correctPasswordVal = '1234',
   onUnlockSuccess,
+  onUnlockDev,
   onCancel,
   showToast
 }: UnlockScreenProps) {
@@ -29,20 +31,42 @@ export default function UnlockScreen({
     };
   }, []);
 
-  // Auto-unlock when password length matches correct value
+  // Physical keyboard listener for desktop convenience
   useEffect(() => {
-    if (inputPass.length > 0 && inputPass.length === correctPasswordVal.length) {
-      if (inputPass === correctPasswordVal) {
-        showToast('Decryption successful.', 'success');
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') {
+        if (inputPass.length < 4) {
+          setInputPass(prev => (prev.length < 4 ? prev + e.key : prev));
+        }
+      } else if (e.key === 'Backspace') {
+        setInputPass(prev => prev.slice(0, -1));
+      } else if (e.key === 'Escape' || e.key === 'Delete') {
+        setInputPass('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [inputPass]);
+
+  // Auto-unlock when password length reaches 4 digits
+  useEffect(() => {
+    if (inputPass.length === 4) {
+      if (inputPass === '1234' || inputPass === correctPasswordVal) {
+        showToast('Akses Obrolan Terbuka.', 'success');
         onUnlockSuccess();
+      } else if (inputPass === '4321') {
+        showToast('Akses DevTools Terbuka.', 'success');
+        if (onUnlockDev) {
+          onUnlockDev();
+        }
       } else {
         setShake(true);
-        showToast('Authentication rejected.', 'error');
+        showToast('PIN tidak valid.', 'error');
         setTimeout(() => setShake(false), 500);
         setInputPass('');
       }
     }
-  }, [inputPass, correctPasswordVal, onUnlockSuccess, showToast]);
+  }, [inputPass, correctPasswordVal, onUnlockSuccess, onUnlockDev, showToast]);
 
   const handleKeyPress = (char: string) => {
     if (char === '⌫') {
@@ -50,8 +74,7 @@ export default function UnlockScreen({
     } else if (char === 'CLEAR') {
       setInputPass('');
     } else {
-      // Avoid typing more than the passcode length
-      if (inputPass.length < correctPasswordVal.length) {
+      if (inputPass.length < 4) {
         setInputPass(prev => prev + char);
       }
     }
@@ -62,16 +85,18 @@ export default function UnlockScreen({
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a] text-neutral-100 font-sans select-none overflow-hidden relative">
       
-      {/* Header bar - no text, just minimal back button */}
-      <div className="flex items-center px-4 py-4 bg-[#0a0a0a] sticky top-0 z-10">
-        <button
-          onClick={onCancel}
-          className="p-2.5 rounded-xl hover:bg-neutral-900 text-neutral-400 hover:text-neutral-100 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center mr-2 border border-transparent hover:border-neutral-800"
-          aria-label="Back"
-        >
-          <ArrowLeft size={18} />
-        </button>
-      </div>
+      {/* Header bar - only show back button if onCancel is provided */}
+      {onCancel && (
+        <div className="flex items-center px-4 py-4 bg-[#0a0a0a] sticky top-0 z-10">
+          <button
+            onClick={onCancel}
+            className="p-2.5 rounded-xl hover:bg-neutral-900 text-neutral-400 hover:text-neutral-100 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center mr-2 border border-transparent hover:border-neutral-800"
+            aria-label="Back"
+          >
+            <ArrowLeft size={18} />
+          </button>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col justify-center items-center px-6 pb-12">
