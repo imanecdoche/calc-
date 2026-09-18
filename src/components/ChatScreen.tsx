@@ -365,27 +365,53 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       return 'Offline';
     }
 
-    const diffMs = Math.max(0, Date.now() - targetPresence.lastSeen);
+    const now = new Date();
+    const date = new Date(targetPresence.lastSeen);
+    const diffMs = Math.max(0, now.getTime() - targetPresence.lastSeen);
     const diffSec = Math.floor(diffMs / 1000);
     const diffMin = Math.floor(diffMs / 60000);
-
-    if (diffSec < 60) {
-      return 'Last online just now';
-    }
-    if (diffMin < 60) {
-      return `Last online ${diffMin} min ago`;
-    }
     const diffHours = Math.floor(diffMin / 60);
-    if (diffHours < 24) {
-      return `Last online ${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
+
+    // 1. Under 1 minute
+    if (diffSec < 60) {
+      return 'just now';
     }
+
+    // 2. Under 60 minutes: "1 minute" or "N minutes"
+    if (diffMin < 60) {
+      return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'}`;
+    }
+
+    // 3. Same calendar day (today): specific time "seen at 12:23 PM"
+    const isToday = now.toDateString() === date.toDateString();
+    if (isToday) {
+      const timeStr = date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      return `seen at ${timeStr}`;
+    }
+
+    // 4. Past midnight but under 2 hours
+    if (diffHours === 1) {
+      return '1 hour';
+    }
+
+    // 5. Yesterday
+    const yesterdayDate = new Date(now);
+    yesterdayDate.setDate(now.getDate() - 1);
+    const isYesterday = yesterdayDate.toDateString() === date.toDateString();
+    if (isYesterday) {
+      return 'yesterday';
+    }
+
+    // 6. Within past week: "N days"
     const diffDays = Math.floor(diffHours / 24);
-    if (diffDays === 1) {
-      return 'Last online yesterday';
+    if (diffDays >= 1 && diffDays < 7) {
+      return `${diffDays} ${diffDays === 1 ? 'day' : 'days'}`;
     }
-    if (diffDays < 7) {
-      return `Last online ${diffDays} days ago`;
-    }
+
     return 'Offline';
   }, [targetIsTyping, targetPresence, tick]);
 
