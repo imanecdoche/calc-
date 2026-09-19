@@ -477,6 +477,16 @@ export function useChatViewModel() {
     localStorage.setItem(`calcplus_deleted_me_${conversationId}`, JSON.stringify(updated));
   }, [deletedLocalIds, activeTargetUser, myUsername]);
 
+  // 9b. Clear all messages on screen locally (terminal /clear command)
+  const handleClearScreen = useCallback(() => {
+    if (!activeTargetUser || !myUsername) return;
+    const conversationId = conversationRepository.generateConversationId(myUsername, activeTargetUser.username);
+    const allIds = rawMessages.map((m) => m.id);
+    const updated = Array.from(new Set([...deletedLocalIds, ...allIds]));
+    setDeletedLocalIds(updated);
+    localStorage.setItem(`calcplus_deleted_me_${conversationId}`, JSON.stringify(updated));
+  }, [rawMessages, deletedLocalIds, activeTargetUser, myUsername]);
+
   // 10. Delete message for everyone (Firestore level)
   const handleDeleteForEveryone = useCallback(async (msg: Message) => {
     if (!activeTargetUser || !myUsername) return;
@@ -743,6 +753,7 @@ export function useChatViewModel() {
     handleCancelReply,
     handleCopyMessage,
     handleDeleteForMe,
+    handleClearScreen,
     handleDeleteForEveryone,
     editMessage,
     loadMoreHistory,

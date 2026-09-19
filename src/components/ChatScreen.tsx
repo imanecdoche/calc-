@@ -315,7 +315,8 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     const d = new Date(ts);
     const h = d.getHours().toString().padStart(2, '0');
     const m = d.getMinutes().toString().padStart(2, '0');
-    return `${h}:${m}`;
+    const s = d.getSeconds().toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
   };
 
   const handleReplyClick = (replyToId: string) => {
@@ -575,6 +576,16 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
 
     if (!text.trim()) return;
 
+    if (text.trim().toLowerCase() === '/clear') {
+      viewModel.handleClearScreen();
+      setText('');
+      showSnackbar('Terminal buffer cleared.', 'info');
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+      return;
+    }
+
     if (editingMessage) {
       await viewModel.editMessage(editingMessage, text.trim());
       setEditingMessage(null);
@@ -746,11 +757,13 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
           </div>
         )}
 
-        {/* Stream of Terminal Messages */}
-        <div className="space-y-2 flex flex-col">
+        {/* Stream of Terminal Messages (Full Single-Line Terminal Output) */}
+        <div className="flex flex-col space-y-1 w-full py-1">
           {messages.map((msg, index) => {
             const isMe = msg.senderId === viewModel.myUsername;
             const isVoice = !!msg.audioUrl;
+            const isSeen = !isMe || msg.status === 'delivered';
+            const ackLabel = isSeen ? '[ACK:seen]' : '[ACK:sent]';
 
             return (
               <div 
@@ -760,67 +773,41 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                   e.preventDefault();
                   handleLongPress(e, msg);
                 }}
-                className={`w-full p-2.5 border transition-all duration-200 font-mono text-left group select-text ${
-                  isMe 
-                    ? 'border-l-2 border-emerald-500/80 bg-emerald-950/15 border-t-zinc-900 border-r-zinc-900 border-b-zinc-900' 
-                    : 'border-l-2 border-sky-500/80 bg-sky-950/15 border-t-zinc-900 border-r-zinc-900 border-b-zinc-900'
-                } ${
+                className={`w-full py-0.5 px-1 font-mono text-xs sm:text-sm hover:bg-zinc-900/60 transition cursor-pointer select-text leading-relaxed flex flex-wrap items-baseline gap-x-1 ${
                   blinkedMessageId === msg.id 
-                    ? 'animate-blink-twice ring-1 ring-emerald-400' 
-                    : 'hover:border-zinc-700'
+                    ? 'animate-blink-twice bg-emerald-950/40 ring-1 ring-emerald-400' 
+                    : ''
                 }`}
               >
-                {/* Header Line of Message */}
-                <div className="flex items-center justify-between text-xs mb-1 select-none border-b border-zinc-800/60 pb-1">
-                  <div className="flex items-center space-x-2 truncate">
-                    <span className="text-zinc-500 text-[11px]">
-                      [{formatTimeStr(msg.timestamp)}]
-                    </span>
-                    <span className={`font-bold ${isMe ? 'text-emerald-400' : 'text-sky-400'}`}>
-                      {isMe ? `<${viewModel.myUsername || 'you'}@local>` : `<${msg.senderId}@remote>`}
-                    </span>
-                  </div>
+                {/* Prefix format: > [time][@...]~$: */}
+                <span className="text-zinc-500 font-bold select-none">&gt;</span>
+                <span className="text-zinc-400 font-mono">[{formatTimeStr(msg.timestamp)}]</span>
+                <span className={`font-mono font-bold ${isMe ? 'text-emerald-400' : 'text-sky-400'}`}>
+                  [@{msg.senderId}]
+                </span>
+                <span className="text-emerald-500 font-bold font-mono mr-1 select-none">~$:</span>
 
-                  <div className="flex items-center space-x-2 text-[11px] text-zinc-500 shrink-0">
-                    {msg.isEdited && (
-                      <span className="text-amber-400/80 font-mono">[EDITED]</span>
-                    )}
-                    {isMe && !msg.deletedForEveryone && (
-                      <span className="font-mono text-[10px]">
-                        {msg.status === 'sending' 
-                          ? '[TRANSMITTING...]' 
-                          : msg.status === 'delivered' 
-                            ? '[ACK:SEEN]' 
-                            : msg.status === 'failed' 
-                              ? '[ERR:FAILED]' 
-                              : '[SENT]'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Reply Quote Block (Terminal Style) */}
+                {/* Optional reply quote reference inline */}
                 {msg.replyToId && !msg.deletedForEveryone && (
-                  <div 
+                  <span 
                     onClick={(e) => {
                       e.stopPropagation();
                       handleReplyClick(msg.replyToId!);
                     }}
-                    className="mb-1.5 text-xs text-zinc-400 font-mono bg-zinc-900/90 px-2.5 py-1 border-l-2 border-sky-400 cursor-pointer hover:text-zinc-200 transition flex items-center gap-1.5"
+                    className="text-zinc-400 italic mr-1 hover:text-sky-300 transition cursor-pointer"
                   >
-                    <span className="text-sky-400 font-semibold">&gt; IN REPLY TO @{msg.replyToSender}:</span>
-                    <span className="truncate italic flex-1">"{msg.replyToText}"</span>
-                  </div>
+                    [re: @{msg.replyToSender}: "{msg.replyToText}"]
+                  </span>
                 )}
 
-                {/* Body Content */}
+                {/* Content */}
                 {msg.deletedForEveryone ? (
-                  <div className="text-rose-400/80 italic text-xs font-mono select-none py-0.5">
-                    [SYSTEM: TRANSMISSION EXPUNGED BY SENDER]
-                  </div>
+                  <span className="text-rose-400/80 italic mr-1">
+                    [transmission expunged]
+                  </span>
                 ) : isVoice ? (
-                  <div className="flex items-center space-x-3 py-1 font-mono text-xs text-zinc-300">
-                    <span className="text-amber-400 font-bold">[AUDIO PAYLOAD: {msg.audioDuration || 0}s]</span>
+                  <span className="inline-flex items-center gap-1.5 mr-1">
+                    <span className="text-amber-400 font-bold">[AUDIO: {msg.audioDuration || 0}s]</span>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -832,52 +819,45 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                           player.play(msg.id, msg.audioUrl || '');
                         }
                       }}
-                      className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-600 text-xs font-mono transition cursor-pointer flex items-center gap-1.5"
+                      className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-600 text-[11px] font-mono transition cursor-pointer"
                     >
-                      {msg.id === playingVoiceId ? <Pause size={12} /> : <Play size={12} />}
-                      <span>{msg.id === playingVoiceId ? 'PAUSE' : 'PLAY'}</span>
+                      {msg.id === playingVoiceId ? '[PAUSE]' : '[PLAY]'}
                     </button>
-                  </div>
+                  </span>
                 ) : msg.imageUrl ? (
-                  <div className="flex flex-col space-y-1.5 font-mono">
-                    <div className="text-[11px] text-zinc-400 flex items-center gap-1 select-none">
-                      <span className="text-emerald-400 font-bold">[PAYLOAD: IMAGE_DATA]</span>
-                      <span className="text-zinc-600">•</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setViewingImage(msg.imageUrl || null);
-                        }}
-                        className="text-zinc-400 hover:text-emerald-400 transition cursor-pointer"
-                      >
-                        [EXPAND]
-                      </button>
-                    </div>
-                    <div
+                  <span className="inline-flex items-center gap-1.5 mr-1">
+                    <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setViewingImage(msg.imageUrl || null);
                       }}
-                      className="border border-zinc-700 hover:border-emerald-400 transition cursor-zoom-in max-w-[280px] max-h-[300px] overflow-hidden bg-black"
+                      className="text-sky-400 hover:text-sky-300 underline font-mono cursor-pointer"
                     >
-                      <img
-                        src={msg.imageUrl}
-                        alt="Payload preview"
-                        className="w-full h-auto max-h-[300px] object-cover"
-                        loading="lazy"
-                      />
-                    </div>
+                      [PHOTO: VIEW]
+                    </button>
                     {msg.text && msg.text !== '[Photo]' && (
-                      <div className="text-xs sm:text-sm text-zinc-200 mt-1 whitespace-pre-wrap break-words font-mono">
-                        <span className="text-zinc-500 font-bold mr-1.5">&gt;</span>{msg.text}
-                      </div>
+                      <span className="text-zinc-200">"{msg.text}"</span>
                     )}
-                  </div>
+                  </span>
                 ) : (
-                  <div className="text-xs sm:text-sm text-zinc-100 whitespace-pre-wrap break-words font-mono leading-relaxed select-text py-0.5">
+                  <span className="text-zinc-100 whitespace-pre-wrap break-words mr-1">
                     {msg.text}
-                  </div>
+                  </span>
+                )}
+
+                {/* Edited marker */}
+                {msg.isEdited && (
+                  <span className="text-amber-400/80 text-[10px] mr-1 select-none">(edited)</span>
+                )}
+
+                {/* ACK Indicator: kalo send warna putih, kalo seen warna hijau */}
+                {!msg.deletedForEveryone && (
+                  <span className={`font-mono text-xs select-none ${
+                    isSeen ? 'text-emerald-400 font-bold' : 'text-white font-bold'
+                  }`}>
+                    {ackLabel}
+                  </span>
                 )}
               </div>
             );

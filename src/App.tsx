@@ -5,14 +5,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Wifi, 
-  Battery, 
-  Smartphone, 
-  Monitor, 
-  ShieldCheck, 
-  Sparkles 
-} from 'lucide-react';
+
 import { useCalculatorViewModel } from './hooks/useCalculatorViewModel';
 import { FullscreenManager } from './services/FullscreenManager';
 import CalculatorScreen from './components/CalculatorScreen';
@@ -105,22 +98,7 @@ export default function App() {
   }, []);
 
 
-  // --- State for Device Mockup Frame ---
-  const [useBezel, setUseBezel] = useState<boolean>(true);
-  const [deviceTime, setDeviceTime] = useState<string>('12:00');
 
-  // Live status bar clock simulation
-  useEffect(() => {
-    const updateClock = () => {
-      const now = new Date();
-      let hours = now.getHours();
-      let minutes = now.getMinutes().toString().padStart(2, '0');
-      setDeviceTime(`${hours}:${minutes}`);
-    };
-    updateClock();
-    const interval = setInterval(updateClock, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Set explicit values for manual state correction (e.g. on direct set)
   const setExpression = (val: string) => {
@@ -138,34 +116,13 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-neutral-100 flex flex-col items-center justify-center p-0 sm:p-6 select-none font-sans overflow-x-hidden">
+    <div className="w-full h-screen h-[100dvh] bg-[#0a0a0a] text-neutral-100 flex flex-col select-none font-sans overflow-hidden">
       
       {/* Background elegant grid */}
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#161616_1px,transparent_1px),linear-gradient(to_bottom,#161616_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-25 pointer-events-none" />
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#161616_1px,transparent_1px),linear-gradient(to_bottom,#161616_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-20 pointer-events-none" />
 
-      {/* Aesthetic upper banner for desktop viewing */}
-      <div className="hidden sm:flex items-center justify-between w-full max-w-md mb-4 px-3 py-1 bg-[#101010]/80 border border-neutral-900 rounded-full backdrop-blur-md">
-        <div className="flex items-center space-x-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-neutral-400 animate-pulse" />
-          <span className="text-[9px] font-medium tracking-widest text-neutral-400 uppercase font-mono">Interactive Frame</span>
-        </div>
-        <button
-          onClick={() => setUseBezel(!useBezel)}
-          className="px-3 py-1 rounded-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[9px] font-medium text-neutral-300 font-mono tracking-wider uppercase flex items-center space-x-1.5 transition active:scale-95 cursor-pointer"
-        >
-          {useBezel ? <Monitor size={9} /> : <Smartphone size={9} />}
-          <span>{useBezel ? 'Full Width' : 'Phone Frame'}</span>
-        </button>
-      </div>
-
-      {/* PRIMARY PHONE WRAPPER DEVICE */}
-      <div 
-        className={`relative w-full transition-all duration-300 ease-out-quint ${
-          useBezel 
-            ? 'max-w-md h-[100vh] sm:h-[860px] sm:rounded-[40px] sm:border-[10px] sm:border-neutral-900 sm:shadow-2xl sm:shadow-black/60 sm:ring-1 sm:ring-neutral-800/50' 
-            : 'max-w-3xl h-[100vh] sm:h-[800px] sm:rounded-2xl sm:border border-neutral-900 sm:shadow-2xl sm:shadow-black/40'
-        } bg-neutral-950 overflow-hidden flex flex-col`}
-      >
+      {/* FULL VIEWPORT APPLICATION CONTAINER */}
+      <div className="relative w-full h-full bg-[#0a0a0a] overflow-hidden flex flex-col">
         
 
 
