@@ -61,6 +61,7 @@ export function useChatViewModel() {
   const [autoclearMinutes, setAutoclearMinutes] = useState<number>(0);
   const [autoclearActivatedAt, setAutoclearActivatedAt] = useState<number | null>(null);
   const [autoclearSetBy, setAutoclearSetBy] = useState<string | null>(null);
+  const [isAcMeoActive, setIsAcMeoActive] = useState<boolean>(false);
 
   // Instances for Managers
   const replyManager = useMemo(() => new ReplyManager(), []);
@@ -190,6 +191,10 @@ export function useChatViewModel() {
       } else {
         setDeletedLocalIds([]);
       }
+      setIsAcMeoActive(localStorage.getItem(`calcplus_ac_meo_${conversationId}`) === 'true');
+    } else {
+      setDeletedLocalIds([]);
+      setIsAcMeoActive(false);
     }
   }, [activeTargetUser, myUsername]);
 
@@ -541,13 +546,18 @@ export function useChatViewModel() {
 
     const cleanMinutes = Math.max(0, minutes);
 
+    setIsAcMeoActive(false);
+    localStorage.removeItem(`calcplus_ac_meo_${conversationId}`);
+
     try {
       if (cleanMinutes === 0) {
         await updateDoc(conversationRef, {
           autoclearMinutes: 0,
           autoclearActivatedAt: null,
           autoclearSetBy: myUsername,
-          autoclearUpdatedAt: Date.now()
+          autoclearUpdatedAt: Date.now(),
+          acMeoActiveFor: null,
+          reloadHistoryFor: null
         });
         await addDoc(messagesCollection, {
           senderId: 'SYSTEM',
@@ -561,7 +571,8 @@ export function useChatViewModel() {
           autoclearMinutes: cleanMinutes,
           autoclearActivatedAt: null, // Timer only activates after a reply is sent!
           autoclearSetBy: myUsername,
-          autoclearUpdatedAt: Date.now()
+          autoclearUpdatedAt: Date.now(),
+          acMeoActiveFor: null
         });
         await addDoc(messagesCollection, {
           senderId: 'SYSTEM',
@@ -574,6 +585,79 @@ export function useChatViewModel() {
     } catch (err) {
       console.error('Failed to update autoclear setting:', err);
       setErrorMsg('Failed to update autoclear setting.');
+    }
+  }, [activeTargetUser, myUsername]);
+
+  // 9d. Instant autoclear for 'saya' excluding unread messages
+  const purgeReadMessagesInstant = useCallback(() => {
+    if (!activeTargetUser || !myUsername) return;
+    const conversationId = conversationRepository.generateConversationId(myUsername, activeTargetUser.username);
+
+    // Identify index of last message sent by myUsername
+    let lastMyMessageIndex = -1;
+    for (let i = rawMessages.length - 1; i >= 0; i--) {
+      if (rawMessages[i].senderId === myUsername) {
+        lastMyMessageIndex = i;
+        break;
+      }
+    }
+
+    const unreadIds = new Set<string>();
+    rawMessages.forEach((m, idx) => {
+      if (m.senderId !== myUsername && m.senderId !== 'SYSTEM') {
+        const isUnanswered = idx > lastMyMessageIndex;
+        const isNotRead = (m as any).isRead === false || m.status !== 'read';
+        if (isUnanswered || isNotRead) {
+          unreadIds.add(m.id);
+        }
+      }
+    });
+
+    // All messages EXCEPT unread messages are purged locally for 'saya'
+    const idsToPurge = rawMessages
+      .filter((m) => !unreadIds.has(m.id))
+      .map((m) => m.id);
+
+    if (idsToPurge.length > 0) {
+      setDeletedLocalIds((prev) => {
+        const updated = Array.from(new Set([...prev, ...idsToPurge]));
+        localStorage.setItem(`calcplus_deleted_me_${conversationId}`, JSON.stringify(updated));
+        return updated;
+      });
+    }
+  }, [activeTargetUser, myUsername, rawMessages]);
+
+  // 9e. Activate /ac meo command
+  const activateAcMeo = useCallback(async () => {
+    if (!activeTargetUser || !myUsername) return;
+    const conversationId = conversationRepository.generateConversationId(myUsername, activeTargetUser.username);
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const messagesCollection = collection(db, 'conversations', conversationId, 'messages');
+
+    setIsAcMeoActive(true);
+    localStorage.setItem(`calcplus_ac_meo_${conversationId}`, 'true');
+
+    try {
+      await updateDoc(conversationRef, {
+        autoclearMinutes: 0,
+        autoclearActivatedAt: null,
+        autoclearSetBy: myUsername,
+        autoclearUpdatedAt: Date.now(),
+        reloadHistoryFor: activeTargetUser.username,
+        reloadRequestedAt: Date.now(),
+        acMeoActiveFor: myUsername
+      });
+
+      await addDoc(messagesCollection, {
+        senderId: 'SYSTEM',
+        receiverId: 'ALL',
+        text: `[SYSTEM: /ac meo aktif. Autoclear @${activeTargetUser.username} dinonaktifkan & riwayat direload. Mode autoclear instan @${myUsername} aktif saat unfocus/inactive/tutup chat (pesan unread dipertahankan).]`,
+        timestamp: Date.now(),
+        status: 'delivered'
+      });
+    } catch (err) {
+      console.error('Failed to activate /ac meo:', err);
+      setErrorMsg('Gagal mengaktifkan /ac meo.');
     }
   }, [activeTargetUser, myUsername]);
 
@@ -636,6 +720,9 @@ export function useChatViewModel() {
 
   // 13. Disconnect, clear listener and memory completely (Privacy requirement)
   const disconnect = useCallback(() => {
+    if (isAcMeoActive && activeTargetUser && myUsername) {
+      purgeReadMessagesInstant();
+    }
     sessionCleaner.wipeSession();
     setActiveTargetUser(null);
     setRawMessages([]);
@@ -647,7 +734,7 @@ export function useChatViewModel() {
     setTargetPresence({ isOnline: false, lastSeen: null });
     connectionManager.setFirestoreConnected(false);
     paginationManager.reset();
-  }, [paginationManager]);
+  }, [paginationManager, isAcMeoActive, activeTargetUser, myUsername, purgeReadMessagesInstant]);
 
   // 14. Realtime Paginated Firestore subscription
   useEffect(() => {
@@ -786,6 +873,18 @@ export function useChatViewModel() {
       setAutoclearMinutes(minutes);
       setAutoclearActivatedAt(activatedAt);
       setAutoclearSetBy(setBy);
+
+      // Handle reload history for 'dia' and disable autoclear on 'dia'
+      if (data.reloadHistoryFor === myUsername && data.reloadRequestedAt) {
+        const lastHandled = localStorage.getItem(`calcplus_last_reloaded_${conversationId}`);
+        if (lastHandled !== String(data.reloadRequestedAt)) {
+          localStorage.setItem(`calcplus_last_reloaded_${conversationId}`, String(data.reloadRequestedAt));
+          setDeletedLocalIds([]);
+          localStorage.removeItem(`calcplus_deleted_me_${conversationId}`);
+          setIsAcMeoActive(false);
+          localStorage.removeItem(`calcplus_ac_meo_${conversationId}`);
+        }
+      }
     }, (err) => {
       console.error('Error listening to conversation presence:', err);
     });
@@ -859,6 +958,30 @@ export function useChatViewModel() {
     return () => clearInterval(interval);
   }, [activeTargetUser, myUsername, autoclearMinutes, autoclearActivatedAt]);
 
+  // 14.7 Autoclear instant purge on window blur / inactive / tab hidden if /ac meo is active
+  useEffect(() => {
+    if (!isAcMeoActive || !activeTargetUser || !myUsername) return;
+
+    const handleInactiveOrBlur = () => {
+      purgeReadMessagesInstant();
+    };
+
+    window.addEventListener('blur', handleInactiveOrBlur);
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleInactiveOrBlur();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('blur', handleInactiveOrBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      handleInactiveOrBlur();
+    };
+  }, [isAcMeoActive, activeTargetUser, myUsername, purgeReadMessagesInstant]);
+
   // 15. Merge raw firestore messages, optimistic local sending arrays, and filter locally deleted messages
   const processedMessages = useMemo(() => {
     // Filter out messages that have been marked deleted locally
@@ -908,6 +1031,9 @@ export function useChatViewModel() {
     autoclearSetBy,
     setAutoclear,
     checkTriggerAutoclearOnReply,
+    activateAcMeo,
+    isAcMeoActive,
+    purgeReadMessagesInstant,
     clearError: () => setErrorMsg(null),
     showManualError: (msg: string) => setErrorMsg(msg)
   };

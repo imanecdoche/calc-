@@ -10,6 +10,9 @@ export interface Conversation {
   autoclearActivatedAt?: number | null;
   autoclearSetBy?: string;
   autoclearUpdatedAt?: number;
+  reloadHistoryFor?: string;
+  reloadRequestedAt?: number;
+  acMeoActiveFor?: string;
 }
 
 export class ConversationRepository {

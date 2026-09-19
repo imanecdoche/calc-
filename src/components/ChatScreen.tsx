@@ -639,23 +639,27 @@ export default function ChatScreen({
     }
 
     const trimmedCmd = text.trim();
-    if (trimmedCmd.toLowerCase().startsWith('/autoclear')) {
+    const lowerCmd = trimmedCmd.toLowerCase();
+    if (lowerCmd.startsWith('/autoclear') || lowerCmd.startsWith('/ac ') || lowerCmd === '/ac') {
       const parts = trimmedCmd.split(/\s+/);
       const arg = parts[1]?.toLowerCase();
 
       if (!arg) {
-        showSnackbar('Usage: /autoclear <minutes> (e.g. /autoclear 5 or /autoclear off)', 'info');
+        showSnackbar('Usage: /ac meo | /autoclear <minutes> | /autoclear off', 'info');
         setText('');
         return;
       }
 
-      if (arg === 'off' || arg === '0') {
+      if (arg === 'meo') {
+        await viewModel.activateAcMeo();
+        showSnackbar('/ac meo aktif: autoclear dia nonaktif & riwayat direload, autoclear instan saya aktif (unread dipertahankan).', 'success');
+      } else if (arg === 'off' || arg === '0') {
         await viewModel.setAutoclear(0);
         showSnackbar('Autoclear deactivated.', 'info');
       } else {
         const minutes = parseFloat(arg);
         if (isNaN(minutes) || minutes <= 0) {
-          showSnackbar('Invalid duration. Use: /autoclear <minutes>', 'error');
+          showSnackbar('Invalid command. Use: /ac meo, /autoclear <minutes>, or /autoclear off', 'error');
         } else {
           await viewModel.setAutoclear(minutes);
           showSnackbar(`Autoclear activated: ${minutes}m after reply.`, 'success');
