@@ -17,7 +17,7 @@ import ChatScreen from './ChatScreen';
 import { useCallViewModel } from '../hooks/CallViewModel';
 import CallOverlay from './CallOverlay';
 import { useDisguiseTrigger } from '../hooks/useDisguiseTrigger';
-import { AppSettings } from '../types';
+import { AppSettings, WordMappingItem } from '../types';
 
 import { SecureWindowManager } from '../services/SecureWindowManager';
 import { SessionTimeoutManager } from '../services/SessionTimeoutManager';
@@ -33,6 +33,7 @@ interface SecretMessengerScreenProps {
   directTargetUser?: string | null;
   clearDirectTargetUser?: () => void;
   appAccessKey: string;
+  wordMappings?: WordMappingItem[];
 }
 
 export default function SecretMessengerScreen({
@@ -44,7 +45,8 @@ export default function SecretMessengerScreen({
   showToast,
   directTargetUser,
   clearDirectTargetUser,
-  appAccessKey
+  appAccessKey,
+  wordMappings = []
 }: SecretMessengerScreenProps) {
   const viewModel = useChatViewModel();
   const callViewModel = useCallViewModel(viewModel.myUsername);
@@ -561,6 +563,7 @@ export default function SecretMessengerScreen({
               <ChatScreen 
                 viewModel={viewModel} 
                 settings={settings}
+                wordMappings={wordMappings}
                 onStartVoiceCall={() => {
                   if (viewModel.activeTargetUser) {
                     callViewModel.startCall(viewModel.activeTargetUser.username);

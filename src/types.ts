@@ -2,7 +2,14 @@
  * Types and interfaces for Calc+
  */
 
-export type AppScreen = 'calculator' | 'unlock' | 'vault' | 'settings' | 'messenger' | 'dev_unlock' | 'dev_tools' | 'wiki_lock';
+export type AppScreen = 'calculator' | 'unlock' | 'vault' | 'settings' | 'messenger' | 'dev_unlock' | 'dev_tools' | 'wiki_lock' | 'word_mapping_config';
+
+export interface WordMappingItem {
+  id: string;
+  originalWord: string;
+  mappedWord: string;
+  enabled: boolean;
+}
 
 export interface HistoryItem {
   id: string;

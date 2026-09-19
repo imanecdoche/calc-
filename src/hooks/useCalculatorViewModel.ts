@@ -6,7 +6,8 @@ import {
   VaultPassword, 
   VaultDiary, 
   AppSettings,
-  SecretShortcut
+  SecretShortcut,
+  WordMappingItem
 } from '../types';
 import { evaluateExpression } from '../utils/MathEngine';
 import { FullscreenManager } from '../services/FullscreenManager';
@@ -22,6 +23,7 @@ interface LocalStorageData {
   vaultDiaries: VaultDiary[];
   settings: AppSettings;
   shortcuts?: SecretShortcut[];
+  wordMappings?: WordMappingItem[];
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -51,6 +53,7 @@ const INITIAL_DATA: LocalStorageData = {
   vaultDiaries: [],
   settings: DEFAULT_SETTINGS,
   shortcuts: [],
+  wordMappings: [],
 };
 
 export function useCalculatorViewModel() {
@@ -77,6 +80,9 @@ export function useCalculatorViewModel() {
   // --- Secret Shortcuts (Persisted) ---
   const [shortcuts, setShortcuts] = useState<SecretShortcut[]>([]);
   const [pendingShortcutUser, setPendingShortcutUser] = useState<string | null>(null);
+
+  // --- Word Mappings (Persisted, Client 'Saya' only) ---
+  const [wordMappings, setWordMappings] = useState<WordMappingItem[]>([]);
 
   // --- UI Toast / Error Feedbacks (Transient) ---
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -126,6 +132,7 @@ export function useCalculatorViewModel() {
     setSettings(migratedSettings);
     setIsDegree(migratedSettings.isDegree ?? false);
     setShortcuts(data.shortcuts || []);
+    setWordMappings(data.wordMappings || []);
   };
 
   // --- Autosave Debounce Engine ---
@@ -145,12 +152,13 @@ export function useCalculatorViewModel() {
         vaultDiaries,
         settings: { ...settings, isDegree },
         shortcuts,
+        wordMappings,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     }, 500); // 500ms debounce autosave
 
     return () => clearTimeout(handler);
-  }, [password, vaultNotes, vaultPasswords, vaultDiaries, settings, isDegree, shortcuts]);
+  }, [password, vaultNotes, vaultPasswords, vaultDiaries, settings, isDegree, shortcuts, wordMappings]);
 
   // --- Helper to show toasts ---
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -482,6 +490,43 @@ export function useCalculatorViewModel() {
     showToast('Pintasan rahasia berhasil dihapus.', 'info');
   };
 
+  // --- Word Mapping Operations (PIN 5000) ---
+  const addWordMapping = (originalWord: string, mappedWord: string) => {
+    const orig = originalWord.trim();
+    const mapped = mappedWord.trim();
+    if (!orig || !mapped) return;
+
+    const newItem: WordMappingItem = {
+      id: 'wm_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      originalWord: orig,
+      mappedWord: mapped,
+      enabled: true
+    };
+    setWordMappings(prev => [
+      ...prev.filter(m => m.originalWord.toLowerCase() !== orig.toLowerCase()),
+      newItem
+    ]);
+    showToast(`Pemetaan kata disimpan: "${orig}" → "${mapped}"`, 'success');
+  };
+
+  const updateWordMapping = (id: string, updates: Partial<WordMappingItem>) => {
+    setWordMappings(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+  };
+
+  const deleteWordMapping = (id: string) => {
+    setWordMappings(prev => prev.filter(m => m.id !== id));
+    showToast('Pemetaan kata dihapus.', 'info');
+  };
+
+  const toggleWordMapping = (id: string) => {
+    setWordMappings(prev => prev.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m));
+  };
+
+  const clearAllWordMappings = () => {
+    setWordMappings([]);
+    showToast('Semua pemetaan kata dibersihkan.', 'info');
+  };
+
   // Storage usage calculation
   const getStorageUsage = () => {
     try {
@@ -551,5 +596,13 @@ export function useCalculatorViewModel() {
     setPendingShortcutUser,
     addShortcut,
     deleteShortcut,
+
+    // Word Mapping state & operations (PIN 5000)
+    wordMappings,
+    addWordMapping,
+    updateWordMapping,
+    deleteWordMapping,
+    toggleWordMapping,
+    clearAllWordMappings,
   };
 }

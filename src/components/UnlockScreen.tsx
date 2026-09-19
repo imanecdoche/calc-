@@ -7,6 +7,7 @@ interface UnlockScreenProps {
   correctPasswordVal?: string;
   onUnlockSuccess: () => void;
   onUnlockDev?: () => void;
+  onUnlockConfig?: () => void;
   onCancel?: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -15,6 +16,7 @@ export default function UnlockScreen({
   correctPasswordVal = '1234',
   onUnlockSuccess,
   onUnlockDev,
+  onUnlockConfig,
   onCancel,
   showToast
 }: UnlockScreenProps) {
@@ -59,6 +61,11 @@ export default function UnlockScreen({
         if (onUnlockDev) {
           onUnlockDev();
         }
+      } else if (inputPass === '5000') {
+        showToast('Akses Konfigurasi Terbuka.', 'success');
+        if (onUnlockConfig) {
+          onUnlockConfig();
+        }
       } else {
         setShake(true);
         showToast('PIN tidak valid.', 'error');
@@ -66,7 +73,7 @@ export default function UnlockScreen({
         setInputPass('');
       }
     }
-  }, [inputPass, correctPasswordVal, onUnlockSuccess, onUnlockDev, showToast]);
+  }, [inputPass, correctPasswordVal, onUnlockSuccess, onUnlockDev, onUnlockConfig, showToast]);
 
   const handleKeyPress = (char: string) => {
     if (char === '⌫') {

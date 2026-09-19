@@ -31,17 +31,26 @@ import { ImageMessageRepository } from '../repositories/ImageMessageRepository';
 import { AudioPlayerManager } from '../services/AudioPlayerManager';
 import { WaveformView } from './WaveformView';
 import VirtualKeyboard from './VirtualKeyboard';
-import { AppSettings } from '../types';
+import { AppSettings, WordMappingItem } from '../types';
+import { applyWordMapping } from '../utils/WordMappingHelper';
 
 interface ChatScreenProps {
   viewModel: ChatViewModelType;
   settings: AppSettings;
+  wordMappings?: WordMappingItem[];
   onStartVoiceCall: () => void;
   onLock: () => void;
   onExitToCalculator: () => void;
 }
 
-export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLock, onExitToCalculator }: ChatScreenProps) {
+export default function ChatScreen({ 
+  viewModel, 
+  settings, 
+  wordMappings = [],
+  onStartVoiceCall, 
+  onLock, 
+  onExitToCalculator 
+}: ChatScreenProps) {
   const [text, setText] = useState('');
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
@@ -883,7 +892,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                     }}
                     className="text-zinc-400 italic mr-1 hover:text-sky-300 transition cursor-pointer"
                   >
-                    [re: @{msg.replyToSender}: "{msg.replyToText}"]
+                    [re: @{msg.replyToSender}: "{applyWordMapping(msg.replyToText || '', wordMappings)}"]
                   </span>
                 )}
 
@@ -924,12 +933,12 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                       [PHOTO: VIEW]
                     </button>
                     {msg.text && msg.text !== '[Photo]' && (
-                      <span className="text-zinc-200">"{msg.text}"</span>
+                      <span className="text-zinc-200">"{applyWordMapping(msg.text, wordMappings)}"</span>
                     )}
                   </span>
                 ) : (
                   <span className="text-zinc-100 whitespace-pre-wrap break-words mr-1">
-                    {msg.text}
+                    {applyWordMapping(msg.text, wordMappings)}
                   </span>
                 )}
 

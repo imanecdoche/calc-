@@ -16,6 +16,7 @@ import SecretMessengerScreen from './components/SecretMessengerScreen';
 import DevUnlockScreen from './components/DevUnlockScreen';
 import DevToolsScreen from './components/DevToolsScreen';
 import WikiLockScreen from './components/WikiLockScreen';
+import WordMappingConfigScreen from './components/WordMappingConfigScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 
 export default function App() {
@@ -61,6 +62,13 @@ export default function App() {
     setPendingShortcutUser,
     addShortcut,
     deleteShortcut,
+
+    wordMappings,
+    addWordMapping,
+    updateWordMapping,
+    deleteWordMapping,
+    toggleWordMapping,
+    clearAllWordMappings,
   } = useCalculatorViewModel();
 
   // --- State for Immersive Fullscreen ---
@@ -159,6 +167,7 @@ export default function App() {
                   correctPasswordVal={password}
                   onUnlockSuccess={() => navigate('messenger')}
                   onUnlockDev={() => navigate('dev_tools')}
+                  onUnlockConfig={() => navigate('word_mapping_config')}
                   showToast={showToast}
                 />
               )}
@@ -174,6 +183,7 @@ export default function App() {
                   directTargetUser={pendingShortcutUser}
                   clearDirectTargetUser={() => setPendingShortcutUser(null)}
                   appAccessKey={password}
+                  wordMappings={wordMappings}
                 />
               )}
 
@@ -234,6 +244,19 @@ export default function App() {
               {screen === 'wiki_lock' && (
                 <WikiLockScreen
                   onUnlockToCalculator={() => navigate('unlock')}
+                />
+              )}
+
+              {screen === 'word_mapping_config' && (
+                <WordMappingConfigScreen
+                  wordMappings={wordMappings}
+                  onAdd={addWordMapping}
+                  onUpdate={updateWordMapping}
+                  onDelete={deleteWordMapping}
+                  onToggle={toggleWordMapping}
+                  onClearAll={clearAllWordMappings}
+                  onBack={() => navigate('unlock')}
+                  showToast={showToast}
                 />
               )}
               </ErrorBoundary>
