@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#141416"/>
+      <stop offset="100%" stop-color="#09090b"/>
+    </linearGradient>
+  </defs>
+  <!-- Background with subtle border -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#27272a" stroke-width="12"/>
+  
+  <!-- Modern Sleek C+ -->
+  <text x="195" y="335" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="250" fill="#f4f4f5" text-anchor="middle">C</text>
+  <path d="M 330 256 L 430 256 M 380 206 L 380 306" stroke="#10b981" stroke-width="38" stroke-linecap="round"/>
+</svg>
