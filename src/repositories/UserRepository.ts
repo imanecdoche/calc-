@@ -7,30 +7,75 @@ export class UserRepository {
 
   /**
    * Fetch all registered users for Developer Tools.
+   * Deduplicates by username and automatically purges older duplicate documents in Firestore.
    */
   public async getAllUsers(): Promise<any[]> {
     const querySnapshot = await getDocs(this.usersCollection);
-    const list: any[] = [];
+    const usersByUsername = new Map<string, any>();
+    const duplicateDocIdsToDelete: string[] = [];
+
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
-      list.push({
+      const rawUsername = data.username || '';
+      const username = rawUsername.trim().toLowerCase();
+      if (!username) return;
+
+      const record = {
         id: docSnap.id,
         uid: data.uid || docSnap.id,
-        username: data.username,
+        username,
         password: data.password || '',
         createdAt: data.createdAt || 0,
-      });
+      };
+
+      if (usersByUsername.has(username)) {
+        const existing = usersByUsername.get(username);
+        // Keep the newer one, mark the older one for deletion
+        if (record.createdAt >= existing.createdAt) {
+          duplicateDocIdsToDelete.push(existing.id);
+          usersByUsername.set(username, record);
+        } else {
+          duplicateDocIdsToDelete.push(record.id);
+        }
+      } else {
+        usersByUsername.set(username, record);
+      }
     });
-    return list;
+
+    // Automatically purge old duplicate documents from Firestore in the background
+    if (duplicateDocIdsToDelete.length > 0) {
+      Promise.all(duplicateDocIdsToDelete.map(id => deleteDoc(doc(db, 'users', id))))
+        .catch(err => console.warn('[UserRepository] Auto-purge duplicates error:', err));
+    }
+
+    return Array.from(usersByUsername.values());
   }
 
   /**
-   * Delete a user by UID/document ID.
+   * Delete a user by UID and clean up any duplicate documents matching the username.
    */
-  public async deleteUser(uid: string): Promise<void> {
+  public async deleteUser(uid: string, username?: string): Promise<void> {
     if (!uid) return;
-    const userDocRef = doc(db, 'users', uid);
-    await deleteDoc(userDocRef);
+    
+    // 1. Delete document by UID
+    try {
+      const userDocRef = doc(db, 'users', uid);
+      await deleteDoc(userDocRef);
+    } catch (e) {
+      console.warn('[UserRepository] Delete by UID failed, checking username:', e);
+    }
+
+    // 2. Also delete all docs with this username to ensure 100% cleanup
+    if (username) {
+      const normalized = username.trim().toLowerCase();
+      const q = query(this.usersCollection, where('username', '==', normalized));
+      const snap = await getDocs(q);
+      const deletions: Promise<void>[] = [];
+      snap.forEach(d => {
+        deletions.push(deleteDoc(d.ref));
+      });
+      await Promise.all(deletions);
+    }
   }
 
   /**
@@ -42,8 +87,8 @@ export class UserRepository {
     
     // Check if the username is taken by someone else
     const existingUser = await this.getUserByUsername(normalized);
-    if (existingUser && (existingUser as any).uid !== uid) {
-      return false; // username is taken by someone else
+    if (existingUser && (existingUser as any).uid !== uid && (existingUser as any).username !== normalized) {
+      return false; // username is taken by another distinct account
     }
 
     const userDocRef = doc(db, 'users', uid);
@@ -55,8 +100,8 @@ export class UserRepository {
   }
 
   /**
-   * Search for a user by their username (case-insensitive query simulation).
-   * Since usernames are unique and stored in lower case, we compare normalized strings.
+   * Search for a user by their username (case-insensitive).
+   * If legacy duplicates exist, returns the latest and purges older duplicates.
    */
   public async getUserByUsername(username: string): Promise<User | null> {
     if (!username) return null;
@@ -69,13 +114,36 @@ export class UserRepository {
       return null;
     }
     
-    const docData = querySnapshot.docs[0].data();
+    // Select the newest doc if duplicates exist
+    let latestDoc = querySnapshot.docs[0];
+    let latestCreatedAt = (latestDoc.data().createdAt as number) || 0;
+    const duplicateIds: string[] = [];
+
+    for (let i = 1; i < querySnapshot.docs.length; i++) {
+      const d = querySnapshot.docs[i];
+      const cTime = (d.data().createdAt as number) || 0;
+      if (cTime > latestCreatedAt) {
+        duplicateIds.push(latestDoc.id);
+        latestDoc = d;
+        latestCreatedAt = cTime;
+      } else {
+        duplicateIds.push(d.id);
+      }
+    }
+
+    if (duplicateIds.length > 0) {
+      Promise.all(duplicateIds.map(id => deleteDoc(doc(db, 'users', id))))
+        .catch(e => console.warn('[UserRepository] Cleaned duplicate docs:', e));
+    }
+
+    const docData = latestDoc.data();
     return {
       username: docData.username,
       displayName: docData.username.charAt(0).toUpperCase() + docData.username.slice(1),
       role: 'TEMPORARY_CONTACT',
-      uid: docData.uid,
-      password: docData.password || ''
+      uid: docData.uid || latestDoc.id,
+      password: docData.password || '',
+      createdAt: docData.createdAt || 0
     } as any;
   }
 
@@ -93,10 +161,25 @@ export class UserRepository {
         username: data.username,
         displayName: data.username.charAt(0).toUpperCase() + data.username.slice(1),
         role: 'OPERATOR',
-        uid: data.uid,
+        uid: data.uid || docSnap.id,
         password: data.password || ''
       } as any;
     }
+
+    // Fallback search by uid field in case document id differs
+    const q = query(this.usersCollection, where('uid', '==', uid));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const data = snap.docs[0].data();
+      return {
+        username: data.username,
+        displayName: data.username.charAt(0).toUpperCase() + data.username.slice(1),
+        role: 'OPERATOR',
+        uid: data.uid || snap.docs[0].id,
+        password: data.password || ''
+      } as any;
+    }
+
     return null;
   }
 
@@ -112,8 +195,15 @@ export class UserRepository {
     if (existingUser) {
       return false; // Already taken
     }
+
+    // 2. Clean up any stale docs for this uid or username
+    const q = query(this.usersCollection, where('username', '==', normalized));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      await deleteDoc(d.ref);
+    }
     
-    // 2. Set the user document under their UID with password
+    // 3. Set the single user document under their UID with password
     const userDocRef = doc(db, 'users', uid);
     await setDoc(userDocRef, {
       uid,
@@ -122,6 +212,38 @@ export class UserRepository {
       createdAt: Date.now()
     });
     
+    return true;
+  }
+
+  /**
+   * Re-link an existing account to a new session UID without creating duplicates.
+   */
+  public async relinkUserUid(newUid: string, username: string): Promise<boolean> {
+    const normalized = username.trim().toLowerCase();
+    const existingUser = await this.getUserByUsername(normalized);
+    if (!existingUser) return false;
+
+    // Remove old docs that aren't newUid
+    const q = query(this.usersCollection, where('username', '==', normalized));
+    const snap = await getDocs(q);
+    const deletions: Promise<void>[] = [];
+    for (const d of snap.docs) {
+      if (d.id !== newUid) {
+        deletions.push(deleteDoc(d.ref));
+      }
+    }
+    await Promise.all(deletions);
+
+    // Write the new single document
+    const userDocRef = doc(db, 'users', newUid);
+    await setDoc(userDocRef, {
+      uid: newUid,
+      username: normalized,
+      password: (existingUser as any).password || '',
+      createdAt: (existingUser as any).createdAt || Date.now(),
+      lastLoginAt: Date.now()
+    });
+
     return true;
   }
 
@@ -139,7 +261,7 @@ export class UserRepository {
 
   /**
    * Login to an existing account on a new device.
-   * Maps the username and password to the new device's UID.
+   * Maps the username and password to the new device's UID, and PURGES old duplicate documents.
    */
   public async loginToExistingAccount(newUid: string, username: string, passwordVal: string): Promise<{ success: boolean; error?: string }> {
     const normalized = username.trim().toLowerCase();
@@ -147,25 +269,37 @@ export class UserRepository {
     // 1. Fetch the existing user profile
     const existingUser = await this.getUserByUsername(normalized);
     if (!existingUser) {
-      return { success: false, error: 'Username not found.' };
+      return { success: false, error: 'Username tidak ditemukan.' };
     }
 
     const correctPassword = (existingUser as any).password;
     if (!correctPassword) {
-      return { success: false, error: 'This account has no password set. Please set a password on your original device first.' };
+      return { success: false, error: 'Akun ini belum memiliki password.' };
     }
 
     if (correctPassword !== passwordVal) {
-      return { success: false, error: 'Incorrect password.' };
+      return { success: false, error: 'Password salah.' };
     }
 
-    // 2. Link this username to the current device's UID by writing a new profile document under newUid
+    // 2. Remove all old documents for this username so there is NEVER a duplicate
+    const q = query(this.usersCollection, where('username', '==', normalized));
+    const snap = await getDocs(q);
+    const deletions: Promise<void>[] = [];
+    for (const d of snap.docs) {
+      if (d.id !== newUid) {
+        deletions.push(deleteDoc(d.ref));
+      }
+    }
+    await Promise.all(deletions);
+
+    // 3. Save the single canonical active user document under newUid
     const userDocRef = doc(db, 'users', newUid);
     await setDoc(userDocRef, {
       uid: newUid,
       username: normalized,
       password: passwordVal,
-      createdAt: Date.now()
+      createdAt: (existingUser as any).createdAt || Date.now(),
+      lastLoginAt: Date.now()
     });
 
     return { success: true };

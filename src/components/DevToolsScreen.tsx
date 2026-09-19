@@ -180,7 +180,7 @@ export default function DevToolsScreen({ onBack, showToast }: DevToolsScreenProp
     setIsSubmitting(true);
     try {
       // Check if username is taken by anyone else
-      const takenByAnother = users.some(u => u.username === cleanUsername && u.uid !== selectedUser.uid);
+      const takenByAnother = users.some(u => u.username === cleanUsername && u.username !== selectedUser.username);
       if (takenByAnother) {
         setFormError('Username sudah digunakan oleh pengguna lain.');
         setIsSubmitting(false);
@@ -193,10 +193,10 @@ export default function DevToolsScreen({ onBack, showToast }: DevToolsScreenProp
         setShowEditModal(false);
         fetchUsers(true);
       } else {
-        setFormError('Gagal memperbarui username.');
+        setFormError('Gagal memperbarui: Username sudah dipakai pengguna lain.');
       }
     } catch (err: any) {
-      setFormError(err.message || 'Gagal mengubah pengguna.');
+      setFormError('Terjadi kesalahan: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -212,7 +212,7 @@ export default function DevToolsScreen({ onBack, showToast }: DevToolsScreenProp
     if (!selectedUser) return;
     setIsSubmitting(true);
     try {
-      await userRepo.deleteUser(selectedUser.uid);
+      await userRepo.deleteUser(selectedUser.uid, selectedUser.username);
       showToast('Akun berhasil dihapus permanent.', 'success');
       setShowDeleteModal(false);
       fetchUsers(true);

@@ -77,7 +77,16 @@ export function useChatViewModel() {
       if (!active) return;
       setAuthUid(uid);
       try {
-        const profile = await userRepository.getUserByUid(uid);
+        let profile = await userRepository.getUserByUid(uid);
+        if (!profile) {
+          const savedUsername = localStorage.getItem('calcplus_active_username');
+          if (savedUsername) {
+            profile = await userRepository.getUserByUsername(savedUsername);
+            if (profile) {
+              await userRepository.relinkUserUid(uid, savedUsername);
+            }
+          }
+        }
         if (active) {
           if (profile) {
             setMyUsername(profile.username);
