@@ -112,6 +112,11 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  // Quick notification routine
+  const showSnackbar = useCallback((text: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setSnackbar({ text, type });
+  }, []);
+
   // Voice Note states
   const recorderManager = useMemo(() => new VoiceRecorderManager(), []);
   const [isRecording, setIsRecording] = useState(false);
@@ -138,10 +143,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
 
-  const handleImageFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processImageFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
       showSnackbar('Please select an image file (JPG, PNG, WEBP, etc.).', 'error');
       return;
@@ -152,6 +154,10 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       return;
     }
 
+    if (selectedImagePreview) {
+      URL.revokeObjectURL(selectedImagePreview);
+    }
+
     setSelectedImageFile(file);
     const previewUrl = URL.createObjectURL(file);
     setSelectedImagePreview(previewUrl);
@@ -159,7 +165,42 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  }, [selectedImagePreview, showSnackbar]);
+
+  const handleImageFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
   };
+
+  const handlePasteEvent = useCallback((e: ClipboardEvent | React.ClipboardEvent) => {
+    const clipboardData = 'clipboardData' in e ? e.clipboardData : null;
+    const items = clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          processImageFile(file);
+          showSnackbar('Image attached from clipboard.', 'info');
+          return;
+        }
+      }
+    }
+  }, [processImageFile, showSnackbar]);
+
+  // Global clipboard paste listener
+  useEffect(() => {
+    const listener = (e: ClipboardEvent) => handlePasteEvent(e);
+    window.addEventListener('paste', listener);
+    return () => {
+      window.removeEventListener('paste', listener);
+    };
+  }, [handlePasteEvent]);
 
   const handleCancelSelectedImage = () => {
     if (selectedImagePreview) {
@@ -484,10 +525,6 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
     return unsubscribe;
   }, []);
 
-  // Quick notification routine
-  const showSnackbar = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setSnackbar({ text, type });
-  };
 
   useEffect(() => {
     if (snackbar) {
@@ -1045,6 +1082,7 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
                 placeholder={editingMessage ? "edit line..." : selectedImageFile ? "enter caption..." : "type command or message..."}
                 value={text}
                 onChange={handleInputChange}
+                onPaste={handlePasteEvent}
                 onFocus={() => {
                   if (settings.keyboardType === 'custom') {
                     setIsKeyboardOpen(true);
