@@ -638,6 +638,20 @@ export default function ChatScreen({
       return;
     }
 
+    if (text.trim().toLowerCase() === '/load') {
+      const res = await viewModel.loadUnrepliedMessages();
+      if (res.count > 0) {
+        showSnackbar(`${res.count} chat belum dibalas berhasil dimuat ulang.`, 'success');
+      } else {
+        showSnackbar('Tidak ada chat yang belum dibalas dari dia.', 'info');
+      }
+      setText('');
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+      return;
+    }
+
     const trimmedCmd = text.trim();
     const lowerCmd = trimmedCmd.toLowerCase();
     if (lowerCmd.startsWith('/autoclear') || lowerCmd.startsWith('/ac ') || lowerCmd === '/ac') {

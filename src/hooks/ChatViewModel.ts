@@ -18,7 +18,7 @@ import { RetryQueue } from '../services/RetryQueue';
 import { PaginationManager } from '../services/PaginationManager';
 import { OfflineQueueManager } from '../services/OfflineQueueManager';
 
-import { doc, updateDoc, onSnapshot, addDoc, collection } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot, addDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase/FirebaseModule';
 
 const authRepository = new AuthRepository();
@@ -661,6 +661,82 @@ export function useChatViewModel() {
     }
   }, [activeTargetUser, myUsername]);
 
+  // 9f. Reload unreplied messages from peer (starting from the peer's first chat after my last chat)
+  const loadUnrepliedMessages = useCallback(async (): Promise<{ count: number }> => {
+    if (!activeTargetUser || !myUsername) return { count: 0 };
+    const conversationId = conversationRepository.generateConversationId(myUsername, activeTargetUser.username);
+
+    // 1. Fetch recent messages from Firestore to make sure we have complete up-to-date data
+    let allMsgs: Message[] = [...rawMessages];
+    try {
+      const messagesCollection = collection(db, 'conversations', conversationId, 'messages');
+      const q = query(messagesCollection, orderBy('timestamp', 'desc'), limit(100));
+      const snap = await getDocs(q);
+
+      const loaded: Message[] = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          senderId: data.senderId,
+          receiverId: data.receiverId,
+          text: data.text,
+          timestamp: data.timestamp,
+          status: data.status || 'sent',
+          replyToId: data.replyToId,
+          replyToText: data.replyToText,
+          replyToSender: data.replyToSender,
+          deletedForEveryone: data.deletedForEveryone,
+          deletedForMeUids: data.deletedForMeUids || [],
+          audioUrl: data.audioUrl,
+          duration: data.duration,
+          audioDuration: data.audioDuration,
+          imageUrl: data.imageUrl,
+          isEdited: data.isEdited
+        };
+      });
+
+      const combinedMap = new Map<string, Message>();
+      rawMessages.forEach((m) => combinedMap.set(m.id, m));
+      loaded.forEach((m) => combinedMap.set(m.id, m));
+      allMsgs = Array.from(combinedMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+    } catch (e) {
+      console.warn('Failed to fetch messages directly for /load, falling back to rawMessages:', e);
+    }
+
+    // 2. Find the last message sent by 'saya' (myUsername)
+    let lastMyMessageIndex = -1;
+    let lastMyMessageTime = 0;
+    for (let i = allMsgs.length - 1; i >= 0; i--) {
+      if (allMsgs[i].senderId === myUsername) {
+        lastMyMessageIndex = i;
+        lastMyMessageTime = allMsgs[i].timestamp;
+        break;
+      }
+    }
+
+    // 3. Identify all messages sent by 'dia' (activeTargetUser.username)
+    // starting from the first chat from 'dia' after my last chat
+    const unrepliedIds: string[] = [];
+    allMsgs.forEach((m, idx) => {
+      if (m.senderId === activeTargetUser.username) {
+        const isAfterMyLast = lastMyMessageIndex === -1 || idx > lastMyMessageIndex || m.timestamp > lastMyMessageTime;
+        if (isAfterMyLast) {
+          unrepliedIds.push(m.id);
+        }
+      }
+    });
+
+    // 4. If any unreplied message was in deletedLocalIds, remove them so they reappear
+    if (unrepliedIds.length > 0) {
+      setDeletedLocalIds((prev) => {
+        const updated = prev.filter((id) => !unrepliedIds.includes(id));
+        localStorage.setItem(`calcplus_deleted_me_${conversationId}`, JSON.stringify(updated));
+        return updated;
+      });
+    }
+
+    return { count: unrepliedIds.length };
+  }, [activeTargetUser, myUsername, rawMessages]);
 
   // 10. Delete message for everyone (Firestore level)
   const handleDeleteForEveryone = useCallback(async (msg: Message) => {
@@ -1034,6 +1110,7 @@ export function useChatViewModel() {
     activateAcMeo,
     isAcMeoActive,
     purgeReadMessagesInstant,
+    loadUnrepliedMessages,
     clearError: () => setErrorMsg(null),
     showManualError: (msg: string) => setErrorMsg(msg)
   };
