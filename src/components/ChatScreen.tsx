@@ -404,6 +404,9 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
         replyToData
       );
 
+      // Trigger autoclear countdown if this voice note is a reply
+      await viewModel.checkTriggerAutoclearOnReply(convId);
+
       // Clean up states
       setRecordedBlob(null);
       setRecordedDuration(0);
@@ -598,6 +601,9 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
           replyToData
         );
 
+        // Trigger autoclear countdown if this photo is a reply
+        await viewModel.checkTriggerAutoclearOnReply(convId);
+
         handleCancelSelectedImage();
         setText('');
         handleCancelReply();
@@ -617,6 +623,36 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
       viewModel.handleClearScreen();
       setText('');
       showSnackbar('Terminal buffer cleared.', 'info');
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+      return;
+    }
+
+    const trimmedCmd = text.trim();
+    if (trimmedCmd.toLowerCase().startsWith('/autoclear')) {
+      const parts = trimmedCmd.split(/\s+/);
+      const arg = parts[1]?.toLowerCase();
+
+      if (!arg) {
+        showSnackbar('Usage: /autoclear <minutes> (e.g. /autoclear 5 or /autoclear off)', 'info');
+        setText('');
+        return;
+      }
+
+      if (arg === 'off' || arg === '0') {
+        await viewModel.setAutoclear(0);
+        showSnackbar('Autoclear deactivated.', 'info');
+      } else {
+        const minutes = parseFloat(arg);
+        if (isNaN(minutes) || minutes <= 0) {
+          showSnackbar('Invalid duration. Use: /autoclear <minutes>', 'error');
+        } else {
+          await viewModel.setAutoclear(minutes);
+          showSnackbar(`Autoclear activated: ${minutes}m after reply.`, 'success');
+        }
+      }
+      setText('');
       setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
@@ -797,6 +833,20 @@ export default function ChatScreen({ viewModel, settings, onStartVoiceCall, onLo
         {/* Stream of Terminal Messages (Full Single-Line Terminal Output) */}
         <div className="flex flex-col space-y-1 w-full py-1">
           {messages.map((msg, index) => {
+            // System Notification format (in RED)
+            if (msg.senderId === 'SYSTEM' || msg.text.startsWith('[SYSTEM:')) {
+              return (
+                <div 
+                  key={msg.id || `msg-${index}`} 
+                  className="w-full py-1 px-1 font-mono text-xs text-rose-500 font-bold select-none leading-relaxed flex flex-wrap items-baseline gap-x-1.5"
+                >
+                  <span className="text-rose-500 font-bold select-none">&gt;</span>
+                  <span className="text-zinc-500 font-mono">[{formatTimeStr(msg.timestamp)}]</span>
+                  <span className="text-rose-400 font-bold font-mono">{msg.text}</span>
+                </div>
+              );
+            }
+
             const isMe = msg.senderId === viewModel.myUsername;
             const isVoice = !!msg.audioUrl;
             const isSeen = !isMe || msg.status === 'delivered';

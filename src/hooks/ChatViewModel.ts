@@ -57,6 +57,11 @@ export function useChatViewModel() {
   const [isSendingLock, setIsSendingLock] = useState<boolean>(false);
   const [hasMoreHistory, setHasMoreHistory] = useState<boolean>(true);
 
+  // Autoclear state hooks
+  const [autoclearMinutes, setAutoclearMinutes] = useState<number>(0);
+  const [autoclearActivatedAt, setAutoclearActivatedAt] = useState<number | null>(null);
+  const [autoclearSetBy, setAutoclearSetBy] = useState<string | null>(null);
+
   // Instances for Managers
   const replyManager = useMemo(() => new ReplyManager(), []);
   const clipboardManager = useMemo(() => ClipboardManager.getInstance(), []);
@@ -326,6 +331,34 @@ export function useChatViewModel() {
     }
   }, [myUsername, authUid, paginationManager]);
 
+  // 5b. Trigger autoclear timer when a reply is sent
+  const checkTriggerAutoclearOnReply = useCallback(async (conversationId: string) => {
+    if (autoclearMinutes > 0 && !autoclearActivatedAt) {
+      const nonSystem = rawMessages.filter((m) => m.senderId !== 'SYSTEM');
+      const lastMsg = nonSystem[nonSystem.length - 1];
+      // Only start timer if this is a reply to the other user's message
+      if (lastMsg && lastMsg.senderId !== myUsername) {
+        try {
+          const conversationRef = doc(db, 'conversations', conversationId);
+          await updateDoc(conversationRef, {
+            autoclearActivatedAt: Date.now(),
+            lastActivity: Date.now()
+          });
+          const messagesCollection = collection(db, 'conversations', conversationId, 'messages');
+          await addDoc(messagesCollection, {
+            senderId: 'SYSTEM',
+            receiverId: 'ALL',
+            text: `[SYSTEM: Reply sent. Autoclear countdown active: ${autoclearMinutes} minute(s)]`,
+            timestamp: Date.now(),
+            status: 'delivered'
+          });
+        } catch (err) {
+          console.error('Error starting autoclear on reply:', err);
+        }
+      }
+    }
+  }, [autoclearMinutes, autoclearActivatedAt, rawMessages, myUsername]);
+
   // 6. Send Message with local Optimistic 'sending' state, Duplicate Protection, Offline Queue
   const sendMessage = useCallback(async (text: string) => {
     const cleanText = text.trim();
@@ -391,6 +424,9 @@ export function useChatViewModel() {
       await updateDoc(conversationRef, {
         lastActivity: tempMessage.timestamp
       });
+
+      // Check and trigger autoclear countdown if this message is a reply
+      await checkTriggerAutoclearOnReply(conversationId);
 
       // Successfully synced, remove from local temp list
       setLocalSendingMessages((prev) => prev.filter((m) => m.id !== tempId));
@@ -486,6 +522,52 @@ export function useChatViewModel() {
     setDeletedLocalIds(updated);
     localStorage.setItem(`calcplus_deleted_me_${conversationId}`, JSON.stringify(updated));
   }, [rawMessages, deletedLocalIds, activeTargetUser, myUsername]);
+
+  // 9c. Set autoclear duration in minutes (0 = disabled)
+  const setAutoclear = useCallback(async (minutes: number) => {
+    if (!activeTargetUser || !myUsername) return;
+    const conversationId = conversationRepository.generateConversationId(myUsername, activeTargetUser.username);
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const messagesCollection = collection(db, 'conversations', conversationId, 'messages');
+
+    const cleanMinutes = Math.max(0, minutes);
+
+    try {
+      if (cleanMinutes === 0) {
+        await updateDoc(conversationRef, {
+          autoclearMinutes: 0,
+          autoclearActivatedAt: null,
+          autoclearSetBy: myUsername,
+          autoclearUpdatedAt: Date.now()
+        });
+        await addDoc(messagesCollection, {
+          senderId: 'SYSTEM',
+          receiverId: 'ALL',
+          text: `[SYSTEM: Autoclear deactivated by @${myUsername}]`,
+          timestamp: Date.now(),
+          status: 'delivered'
+        });
+      } else {
+        await updateDoc(conversationRef, {
+          autoclearMinutes: cleanMinutes,
+          autoclearActivatedAt: null, // Timer only activates after a reply is sent!
+          autoclearSetBy: myUsername,
+          autoclearUpdatedAt: Date.now()
+        });
+        await addDoc(messagesCollection, {
+          senderId: 'SYSTEM',
+          receiverId: 'ALL',
+          text: `[SYSTEM: Autoclear set to ${cleanMinutes}m after reply by @${myUsername}]`,
+          timestamp: Date.now(),
+          status: 'delivered'
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update autoclear setting:', err);
+      setErrorMsg('Failed to update autoclear setting.');
+    }
+  }, [activeTargetUser, myUsername]);
+
 
   // 10. Delete message for everyone (Firestore level)
   const handleDeleteForEveryone = useCallback(async (msg: Message) => {
@@ -687,6 +769,14 @@ export function useChatViewModel() {
       targetLastSeen = lastSeenMap[activeTargetUser.username] || null;
 
       evaluatePresence();
+
+      // Sync autoclear settings between both parties
+      const minutes = typeof data.autoclearMinutes === 'number' ? data.autoclearMinutes : 0;
+      const activatedAt = typeof data.autoclearActivatedAt === 'number' ? data.autoclearActivatedAt : null;
+      const setBy = typeof data.autoclearSetBy === 'string' ? data.autoclearSetBy : null;
+      setAutoclearMinutes(minutes);
+      setAutoclearActivatedAt(activatedAt);
+      setAutoclearSetBy(setBy);
     }, (err) => {
       console.error('Error listening to conversation presence:', err);
     });
@@ -712,6 +802,53 @@ export function useChatViewModel() {
       });
     };
   }, [activeTargetUser, myUsername]);
+
+  // 14.6 Active Autoclear countdown & wiping
+  useEffect(() => {
+    if (!activeTargetUser || !myUsername || autoclearMinutes <= 0 || !autoclearActivatedAt) {
+      return;
+    }
+
+    const conversationId = conversationRepository.generateConversationId(myUsername, activeTargetUser.username);
+    const durationMs = autoclearMinutes * 60 * 1000;
+
+    const checkAutoclear = async () => {
+      const elapsed = Date.now() - autoclearActivatedAt;
+      if (elapsed >= durationMs) {
+        // Leader election: client with smaller username executes the wipe first to avoid duplicate calls.
+        // Fallback for secondary client if leader is offline for +3 seconds.
+        const isLeader = myUsername < activeTargetUser.username;
+        if (!isLeader && elapsed < durationMs + 3000) {
+          return;
+        }
+
+        try {
+          const conversationRef = doc(db, 'conversations', conversationId);
+          await updateDoc(conversationRef, {
+            autoclearActivatedAt: null,
+            lastActivity: Date.now()
+          });
+
+          await realtimeChatService.clearConversationMessages(conversationId);
+
+          const messagesCollection = collection(db, 'conversations', conversationId, 'messages');
+          await addDoc(messagesCollection, {
+            senderId: 'SYSTEM',
+            receiverId: 'ALL',
+            text: `[SYSTEM: Autoclear timer expired. Conversation wiped (${autoclearMinutes}m).]`,
+            timestamp: Date.now(),
+            status: 'delivered'
+          });
+        } catch (err) {
+          console.error('Failed to execute autoclear wipe:', err);
+        }
+      }
+    };
+
+    checkAutoclear();
+    const interval = setInterval(checkAutoclear, 1000);
+    return () => clearInterval(interval);
+  }, [activeTargetUser, myUsername, autoclearMinutes, autoclearActivatedAt]);
 
   // 15. Merge raw firestore messages, optimistic local sending arrays, and filter locally deleted messages
   const processedMessages = useMemo(() => {
@@ -757,6 +894,11 @@ export function useChatViewModel() {
     handleDeleteForEveryone,
     editMessage,
     loadMoreHistory,
+    autoclearMinutes,
+    autoclearActivatedAt,
+    autoclearSetBy,
+    setAutoclear,
+    checkTriggerAutoclearOnReply,
     clearError: () => setErrorMsg(null),
     showManualError: (msg: string) => setErrorMsg(msg)
   };

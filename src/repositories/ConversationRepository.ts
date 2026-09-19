@@ -6,6 +6,10 @@ export interface Conversation {
   participants: string[]; // array of uids
   usernames: string[];    // array of usernames
   lastActivity: number;
+  autoclearMinutes?: number;
+  autoclearActivatedAt?: number | null;
+  autoclearSetBy?: string;
+  autoclearUpdatedAt?: number;
 }
 
 export class ConversationRepository {

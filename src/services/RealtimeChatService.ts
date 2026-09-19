@@ -76,15 +76,18 @@ export class RealtimeChatService {
    */
   public async clearConversationMessages(conversationId: string): Promise<void> {
     const messagesCollection = collection(db, 'conversations', conversationId, 'messages');
-    const q = query(messagesCollection, limit(100));
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(messagesCollection);
 
     if (snapshot.empty) return;
 
-    const batch = writeBatch(db);
-    snapshot.docs.forEach((doc) => {
-      batch.delete(doc.ref);
-    });
-    await batch.commit();
+    const docs = snapshot.docs;
+    for (let i = 0; i < docs.length; i += 450) {
+      const chunk = docs.slice(i, i + 450);
+      const batch = writeBatch(db);
+      chunk.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+    }
   }
 }
